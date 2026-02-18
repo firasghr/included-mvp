@@ -1,41 +1,55 @@
-import supabase from '../database/supabase';
-
-const REPORT_PREFIX = '📝 Daily Report:';
+import taskService from '../services/taskService';
+import summaryService from '../services/summaryService';
+import { processWithLLM } from './llmWorker';
 
 /**
- * Generate a daily report of completed tasks for a specific client
- * @param clientId - The client ID to filter tasks by
- * @returns Text report with all completed task outputs for the client
+ * Background worker function that processes pending tasks
+ * Fetches pending tasks, processes them with LLM, and updates status
  */
-export async function generateReport(clientId: string): Promise<string> {
+export async function processPendingTasks(): Promise<void> {
   try {
-    const { data: tasks, error } = await supabase()
-      .from('tasks')
-      .select('output')
-      .eq('client_id', clientId)
-      .eq('status', 'done')
-      .order('created_at', { ascending: false });
+    console.log('Starting background worker to process pending tasks...');
 
-    if (error) {
-      throw new Error(`Failed to fetch tasks: ${error.message}`);
+    const tasks = await taskService.getPendingTasks(10);
+
+    if (tasks.length === 0) {
+      console.log('No pending tasks to process.');
+      return;
     }
 
-    if (!tasks || tasks.length === 0) {
-      return `${REPORT_PREFIX}\n- No completed tasks found.`;
-    }
+    console.log(`Found ${tasks.length} pending tasks to process.`);
 
-    let report = REPORT_PREFIX;
-    
+    // Process each task
     for (const task of tasks) {
-      if (task.output) {
-        report += `\n- ${task.output}`;
+      try {
+        // Update status to processing
+        await taskService.updateTaskStatus(task.id, 'processing');
+        console.log(`Processing task: ${task.id}`);
+
+        // Process with LLM
+        const summary = await processWithLLM(task.input);
+
+        // Check if there was an error
+        if (summary === 'Error processing input.') {
+          await taskService.updateTaskStatus(task.id, 'failed', summary);
+          console.error(`Task failed: ${task.id}`);
+        } else {
+          // Save summary (this will also create notification events)
+          await summaryService.createSummary(task.id, task.client_id, summary);
+
+          // Update task status to completed
+          await taskService.updateTaskStatus(task.id, 'completed', summary);
+          console.log(`Task completed: ${task.id}`);
+        }
+      } catch (taskError) {
+        console.error(`Error processing task ${task.id}:`, taskError);
+        const errorMessage = taskError instanceof Error ? taskError.message : 'Unknown error';
+        await taskService.updateTaskStatus(task.id, 'failed', `Error: ${errorMessage}`);
       }
     }
 
-    return report;
+    console.log('Background worker finished processing pending tasks.');
   } catch (error) {
-    console.error('Error generating report:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return `${REPORT_PREFIX}\n- Error generating report: ${errorMessage}`;
+    console.error('Error in background worker:', error);
   }
 }

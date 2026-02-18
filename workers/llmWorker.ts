@@ -11,14 +11,21 @@ function getOpenAI(): OpenAI {
     }
 
     openaiInstance = new OpenAI({
-      apiKey
+      apiKey,
+      timeout: 30000, // 30 second timeout
     });
   }
 
   return openaiInstance;
 }
 
-export async function processWithLLM(input: string): Promise<string> {
+/**
+ * Process text with LLM (OpenAI GPT-5 Mini) with retry logic
+ * @param input - The text to process
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
+ * @returns Processed summary text
+ */
+export async function processWithLLM(input: string, maxRetries: number = 3): Promise<string> {
   /*
     GPT-5 Mini Professional Summarizer Worker
 
@@ -37,15 +44,20 @@ export async function processWithLLM(input: string): Promise<string> {
     - No explanations
   */
 
-  try {
-    const openai = getOpenAI();
+  let lastError: Error | null = null;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        {
-          role: "system",
-          content: `
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`LLM processing attempt ${attempt}/${maxRetries}`);
+      
+      const openai = getOpenAI();
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `
 You are a professional SMB operations summarization engine.
 
 Your ONLY job is to summarize business communications.
@@ -70,24 +82,37 @@ BAD OUTPUT EXAMPLE:
 "I can summarize this..."
 "Please provide..."
 "Here is a template..."
-          `
-        },
-        {
-          role: "user",
-          content: input
-        }
-      ]
-    });
+            `
+          },
+          {
+            role: "user",
+            content: input
+          }
+        ],
+      });
 
-    const content = response.choices?.[0]?.message?.content?.trim();
+      const content = response.choices?.[0]?.message?.content?.trim();
 
-    if (!content) {
-      return "Error processing input.";
+      if (!content) {
+        throw new Error("Empty response from LLM");
+      }
+
+      console.log(`LLM processing successful on attempt ${attempt}`);
+      return content;
+
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.error(`LLM error on attempt ${attempt}/${maxRetries}:`, lastError.message);
+      
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+        console.log(`Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
     }
-
-    return content;
-  } catch (err) {
-    console.error("LLM error:", err);
-    return "Error processing input.";
   }
+
+  console.error(`LLM processing failed after ${maxRetries} attempts:`, lastError?.message);
+  return "Error processing input.";
 }
