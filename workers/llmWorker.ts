@@ -1,46 +1,48 @@
-import OpenAI from 'openai';
+import OpenAI from "openai";
 
-/**
- * Process input text with OpenAI GPT-4o-mini to generate professional summaries
- * @param input - The input text (email or document) to summarize
- * @returns Summarized text or error message
- */
-export async function processWithLLM(input: string): Promise<string> {
-  try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is not set');
-    }
+let openaiInstance: OpenAI | null = null;
 
-    const openai = new OpenAI({
-      apiKey,
+function getOpenAI(): OpenAI {
+  if (!openaiInstance) {
+    openaiInstance = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
     });
+  }
+  return openaiInstance;
+}
 
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+export async function processWithLLM(input: string): Promise<string> {
+  /*
+    GPT-5 Mini Integration
+    - Summarizes emails, documents, or notes clearly and concisely
+    - Temperature 0.2 for professional, deterministic outputs
+    - Handles errors gracefully
+    - Returns clean text for automation or report generation
+  */
+  try {
+    const openai = getOpenAI();
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-mini",
       messages: [
         {
-          role: 'system',
-          content: 'You are a professional assistant that creates clear, concise summaries of emails and documents. Provide accurate summaries that capture the key points and action items.',
+          role: "system",
+          content: `
+You are a professional AI assistant for SMBs.
+Your task:
+1. Summarize emails, documents, and notes clearly and concisely.
+2. Keep the output factual and professional.
+3. No unnecessary commentary or filler text.
+4. Output must be ready to include in reports or automation.
+          `
         },
-        {
-          role: 'user',
-          content: `Please summarize the following text:\n\n${input}`,
-        },
+        { role: "user", content: input }
       ],
-      temperature: 0.2,
+      temperature: 0.2
     });
 
-    const summary = completion.choices[0]?.message?.content;
-    
-    if (!summary) {
-      throw new Error('No summary generated from OpenAI');
-    }
-
-    return summary;
-  } catch (error) {
-    console.error('Error processing input with LLM:', error);
-    return 'Error processing input.';
+    return response.choices[0].message.content || "Error processing input.";
+  } catch (err) {
+    console.error("LLM error:", err);
+    return "Error processing input.";
   }
 }
