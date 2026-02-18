@@ -3,14 +3,16 @@ import supabase from '../database/supabase';
 const REPORT_PREFIX = '📝 Daily Report:';
 
 /**
- * Generate a daily report of completed tasks
- * @returns Text report with all completed task outputs
+ * Generate a daily report of completed tasks for a specific client
+ * @param clientId - The client ID to filter tasks by
+ * @returns Text report with all completed task outputs for the client
  */
-export async function generateReport(): Promise<string> {
+export async function generateReport(clientId: string): Promise<string> {
   try {
     const { data: tasks, error } = await supabase()
       .from('tasks')
       .select('output')
+      .eq('client_id', clientId)
       .eq('status', 'done')
       .order('created_at', { ascending: false });
 

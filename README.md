@@ -28,12 +28,13 @@ types/
 ## API Endpoints
 
 ### POST /task
-Creates and processes a new task with LLM.
+Creates and processes a new task with LLM for a specific client.
 
 **Request:**
 ```json
 {
-  "text": "Your input text here"
+  "text": "Your input text here",
+  "clientId": "client-uuid-here"
 }
 ```
 
@@ -48,7 +49,15 @@ Creates and processes a new task with LLM.
 ```
 
 ### GET /report
-Generates a daily report of all tasks.
+Generates a daily report of all tasks for a specific client.
+
+**Query Parameters:**
+- `clientId` (required): The UUID of the client
+
+**Example:**
+```
+GET /report?clientId=client-uuid-here
+```
 
 **Response:**
 ```
@@ -102,15 +111,38 @@ OPENAI_API_KEY=your_openai_key
 PORT=3000
 ```
 
-4. Create Supabase table:
+4. Create Supabase tables:
+
+Run the migration script in your Supabase SQL editor:
+
 ```sql
+-- Create clients table
+CREATE TABLE clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create tasks table
 CREATE TABLE tasks (
   id UUID PRIMARY KEY,
   input TEXT NOT NULL,
   output TEXT,
   status TEXT NOT NULL CHECK (status IN ('processing', 'done', 'failed')),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Create indexes for better query performance
+CREATE INDEX idx_tasks_client_id ON tasks(client_id);
+CREATE INDEX idx_tasks_client_status ON tasks(client_id, status);
+```
+
+Or use the migration file:
+```bash
+cat database/migrations/001_create_clients_table.sql
 ```
 
 ### Running the Server

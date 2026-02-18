@@ -34,13 +34,21 @@ app.get('/health', (_req: Request, res: Response) => {
  */
 app.post('/task', async (req: Request, res: Response) => {
   try {
-    const { text } = req.body;
+    const { text, clientId } = req.body;
 
     // Validate input
     if (!text || typeof text !== 'string' || text.trim().length === 0) {
       return res.status(400).json({
         error: 'Invalid request',
         message: 'Request body must contain a non-empty "text" field',
+      });
+    }
+
+    // Validate clientId
+    if (!clientId || typeof clientId !== 'string' || clientId.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Request body must contain a non-empty "clientId" field',
       });
     }
 
@@ -56,6 +64,7 @@ app.post('/task', async (req: Request, res: Response) => {
           input: text,
           output: null,
           status: 'processing',
+          client_id: clientId,
           created_at: new Date().toISOString(),
         },
       ])
@@ -142,10 +151,20 @@ async function processTaskAsync(taskId: string, inputText: string): Promise<void
  * GET /report
  * Generates a daily report using automation worker
  */
-app.get('/report', async (_req: Request, res: Response) => {
+app.get('/report', async (req: Request, res: Response) => {
   try {
-    console.log('Generating daily report...');
-    const report = await generateReport();
+    const { clientId } = req.query;
+
+    // Validate clientId
+    if (!clientId || typeof clientId !== 'string' || clientId.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Query parameter "clientId" is required',
+      });
+    }
+
+    console.log(`Generating daily report for client: ${clientId}...`);
+    const report = await generateReport(clientId);
 
     return res.status(200).json({ report });
   } catch (error) {
