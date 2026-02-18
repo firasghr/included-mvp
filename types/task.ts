@@ -2,7 +2,7 @@ export interface Task {
   id: string;
   input: string;
   output: string | null;
-  status: 'processing' | 'done' | 'failed' | 'pending' | 'completed';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   client_id: string;
   created_at?: string;
 }

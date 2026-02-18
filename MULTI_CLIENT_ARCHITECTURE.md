@@ -29,7 +29,7 @@ CREATE TABLE tasks (
   id UUID PRIMARY KEY,
   input TEXT NOT NULL,
   output TEXT,
-  status TEXT NOT NULL CHECK (status IN ('processing', 'done', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
   client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -180,9 +180,20 @@ curl "http://localhost:3000/report?clientId=00000000-0000-0000-0000-000000000002
 
 ### Create a New Client
 ```sql
-INSERT INTO clients (name, email)
-VALUES ('Acme Corporation', 'contact@acme.com')
+INSERT INTO clients (name, email, company)
+VALUES ('Acme Corporation', 'contact@acme.com', 'Acme Corp')
 RETURNING id;
+```
+
+Or via API:
+```bash
+curl -X POST http://localhost:3000/clients \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation",
+    "email": "contact@acme.com",
+    "company": "Acme Corp"
+  }'
 ```
 
 ### List All Clients
@@ -212,7 +223,7 @@ interface Task {
   id: string;
   input: string;
   output: string | null;
-  status: 'processing' | 'done' | 'failed';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
   client_id: string;
   created_at?: string;
 }
