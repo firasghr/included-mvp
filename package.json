@@ -1,0 +1,39 @@
+{
+  "name": "included-mvp",
+  "version": "1.0.0",
+  "description": "Private AI assistant for SMBs to automate emails, documents, CRM updates, and reporting",
+  "main": "dist/orchestrator/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/orchestrator/index.js",
+    "dev": "ts-node orchestrator/index.ts",
+    "lint": "eslint . --ext .ts",
+    "test": "jest"
+  },
+  "keywords": [
+    "ai",
+    "automation",
+    "express",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "express": "^4.18.2",
+    "uuid": "^9.0.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/uuid": "^9.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.56.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.11"
+  }
+}
