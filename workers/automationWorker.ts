@@ -17,10 +17,10 @@ export async function generateReport(): Promise<string> {
     }
 
     if (!tasks || tasks.length === 0) {
-      return 'Daily Report:\n- No completed tasks found.';
+      return '📝 Daily Report:\n- No completed tasks found.';
     }
 
-    let report = 'Daily Report:';
+    let report = '📝 Daily Report:';
     
     for (const task of tasks) {
       if (task.output) {
@@ -32,6 +32,6 @@ export async function generateReport(): Promise<string> {
   } catch (error) {
     console.error('Error generating report:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return `Daily Report:\n- Error generating report: ${errorMessage}`;
+    return `📝 Daily Report:\n- Error generating report: ${errorMessage}`;
   }
 }
