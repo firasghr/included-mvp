@@ -147,7 +147,7 @@ app.get('/report', async (_req: Request, res: Response) => {
     console.log('Generating daily report...');
     const report = await generateReport();
 
-    return res.status(200).send(report);
+    return res.status(200).json({ report });
   } catch (error) {
     console.error('Error generating report:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
