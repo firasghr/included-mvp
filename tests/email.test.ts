@@ -3,6 +3,10 @@
  * Tests for the email notification service
  */
 
+// Set environment variables before any imports
+process.env.RESEND_API_KEY = 'test-api-key';
+process.env.FROM_EMAIL = 'test@example.com';
+
 import { clearMockData, getMockData } from './__mocks__/supabase.mock';
 
 // Mock Resend before importing emailService
@@ -29,10 +33,6 @@ describe('Email Service', () => {
 
   beforeEach(() => {
     clearMockData();
-    // Set environment variables for testing
-    process.env.RESEND_API_KEY = 'test-api-key';
-    process.env.FROM_EMAIL = 'test@example.com';
-    
     // Create a new instance for each test
     emailService = new EmailService();
   });
