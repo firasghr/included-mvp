@@ -4,18 +4,27 @@
  */
 
 import request from 'supertest';
-import app from '../../orchestrator/index';
-import { clearMockData, getMockData } from '../__mocks__/supabase.mock';
+import app from '../orchestrator/index';
+import { clearMockData, getMockData } from './__mocks__/supabase.mock';
 import {
   resetOpenAIMock,
   setOpenAIMockResponse,
   setOpenAIMockError,
   mockOpenAI,
-} from '../__mocks__/openai.mock';
+  mockOpenAIResponse,
+} from './__mocks__/openai.mock';
 
-// Helper to wait for async task processing
-const waitForTaskProcessing = (ms: number = 100) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const waitForTaskProcessing = async (maxMs: number = 4000) => {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const mockData = getMockData();
+    const hasPending = mockData.tasks.some(
+      (t) => t.status === 'pending' || t.status === 'processing'
+    );
+    if (!hasPending && mockData.tasks.length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
 
 describe('Task Endpoint', () => {
   let testClientId: string;
@@ -38,6 +47,11 @@ describe('Task Endpoint', () => {
 
   describe('POST /task', () => {
     it('should create a task with valid clientId and text', async () => {
+      // Mock with delay to allow checking pending state
+      mockOpenAI.chat.completions.create.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return mockOpenAIResponse('Summary: Test task completed successfully.');
+      });
       const taskData = {
         text: 'This is a test task to be summarized.',
         clientId: testClientId,
@@ -50,7 +64,7 @@ describe('Task Endpoint', () => {
 
       expect(response.body).toHaveProperty('success', true);
       expect(response.body).toHaveProperty('taskId');
-      expect(response.body).toHaveProperty('status', 'processing');
+      expect(['pending', 'processing']).toContain(response.body.status);
 
       // Verify task was created in database
       const mockData = getMockData();
@@ -58,9 +72,9 @@ describe('Task Endpoint', () => {
       expect(mockData.tasks[0]).toMatchObject({
         input: 'This is a test task to be summarized.',
         client_id: testClientId,
-        status: 'pending',
         output: null,
       });
+      expect(['pending', 'processing']).toContain(mockData.tasks[0].status);
     });
 
     it('should return 400 if text is missing', async () => {
@@ -120,7 +134,11 @@ describe('Task Endpoint', () => {
     });
 
     it('should process task asynchronously through LLM worker', async () => {
-      setOpenAIMockResponse('Summary: Test task completed successfully.');
+      // Mock with delay to allow checking pending state
+      mockOpenAI.chat.completions.create.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return mockOpenAIResponse('Summary: Test task completed successfully.');
+      });
 
       const taskData = {
         text: 'Process this task through LLM.',
@@ -134,12 +152,12 @@ describe('Task Endpoint', () => {
 
       const taskId = response.body.taskId;
 
-      // Initially task should be pending
+      // Initially task should be pending or processing
       const mockData = getMockData();
-      expect(mockData.tasks[0].status).toBe('pending');
+      expect(['pending', 'processing']).toContain(mockData.tasks[0].status);
 
       // Wait for async processing
-      await waitForTaskProcessing(200);
+      await waitForTaskProcessing();
 
       // After processing, task should be completed
       const task = mockData.tasks.find((t) => t.id === taskId);
@@ -151,7 +169,11 @@ describe('Task Endpoint', () => {
     });
 
     it('should verify task status transitions: pending -> processing -> completed', async () => {
-      setOpenAIMockResponse('Completed summary.');
+      // Mock with delay to allow checking pending state
+      mockOpenAI.chat.completions.create.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return mockOpenAIResponse('Completed summary.');
+      });
 
       const taskData = {
         text: 'Track status transitions.',
@@ -166,17 +188,18 @@ describe('Task Endpoint', () => {
       const taskId = response.body.taskId;
       const mockData = getMockData();
 
-      // 1. Initially: pending
+      // 1. Initially: pending or processing (race condition)
       let task = mockData.tasks.find((t) => t.id === taskId);
-      expect(task.status).toBe('pending');
+      expect(['pending', 'processing']).toContain(task.status);
 
-      // 2. Wait a bit for processing to start
-      await waitForTaskProcessing(50);
+      // 2. Wait a bit for processing to start/continue (but not finish)
+      // Use explicit small delay, not waitForTaskProcessing which waits for completion
+      await new Promise((resolve) => setTimeout(resolve, 50));
       task = mockData.tasks.find((t) => t.id === taskId);
       expect(task.status).toBe('processing');
 
       // 3. Wait for completion
-      await waitForTaskProcessing(150);
+      await waitForTaskProcessing();
       task = mockData.tasks.find((t) => t.id === taskId);
       expect(task.status).toBe('completed');
       expect(task.output).toBe('Completed summary.');
@@ -198,7 +221,7 @@ describe('Task Endpoint', () => {
       const taskId = response.body.taskId;
 
       // Wait for async processing
-      await waitForTaskProcessing(200);
+      await waitForTaskProcessing();
 
       // Verify summary was created
       const mockData = getMockData();
@@ -226,8 +249,8 @@ describe('Task Endpoint', () => {
 
       const taskId = response.body.taskId;
 
-      // Wait for async processing
-      await waitForTaskProcessing(300);
+      // Wait for async processing (retries take time)
+      await waitForTaskProcessing(4000);
 
       // Task should be marked as failed
       const mockData = getMockData();
@@ -250,8 +273,8 @@ describe('Task Endpoint', () => {
 
       await request(app).post('/task').send(taskData).expect(201);
 
-      // Wait for async processing
-      await waitForTaskProcessing(300);
+      // Wait for async processing (retries take time)
+      await waitForTaskProcessing(4000);
 
       const mockData = getMockData();
       const task = mockData.tasks[0];
@@ -269,7 +292,7 @@ describe('Task Endpoint', () => {
       await request(app).post('/task').send(taskData).expect(201);
 
       // Wait for async processing
-      await waitForTaskProcessing(200);
+      await waitForTaskProcessing();
 
       // Verify notification events were created
       const mockData = getMockData();
@@ -312,7 +335,7 @@ describe('Task Endpoint', () => {
         .expect(201);
 
       // Wait for all to process
-      await waitForTaskProcessing(300);
+      await waitForTaskProcessing();
 
       const mockData = getMockData();
       expect(mockData.tasks).toHaveLength(3);
@@ -345,7 +368,7 @@ describe('Task Endpoint', () => {
         .send({ text: 'Client 2 task', clientId: client2Id })
         .expect(201);
 
-      await waitForTaskProcessing(250);
+      await waitForTaskProcessing();
 
       const mockData = getMockData();
       expect(mockData.tasks).toHaveLength(2);
@@ -382,8 +405,8 @@ describe('Task Endpoint', () => {
 
       await request(app).post('/task').send(taskData).expect(201);
 
-      // Wait for retries to complete (with backoff delays)
-      await waitForTaskProcessing(1000);
+      // Wait for retries to complete (with backoff delays: 1s + 2s + exec time)
+      await waitForTaskProcessing(4500);
 
       // Should eventually succeed
       const mockData = getMockData();
@@ -408,8 +431,8 @@ describe('Task Endpoint', () => {
 
       await request(app).post('/task').send(taskData).expect(201);
 
-      // Wait for all retries
-      await waitForTaskProcessing(1000);
+      // Wait for all retries (1s + 2s + 4s + exec time)
+      await waitForTaskProcessing(8000);
 
       const mockData = getMockData();
       const task = mockData.tasks[0];

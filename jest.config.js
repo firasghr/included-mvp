@@ -24,5 +24,6 @@ module.exports = {
   verbose: true,
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
+    '^../database/supabase$': '<rootDir>/database/supabase.ts',
   },
 };

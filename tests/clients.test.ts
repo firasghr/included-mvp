@@ -4,8 +4,8 @@
  */
 
 import request from 'supertest';
-import app from '../../orchestrator/index';
-import { clearMockData, getMockData } from '../__mocks__/supabase.mock';
+import app from '../orchestrator';
+import { clearMockData, getMockData } from './__mocks__/supabase.mock';
 
 describe('Client Endpoints', () => {
   // Setup and teardown
@@ -149,11 +149,11 @@ describe('Client Endpoints', () => {
       await request(app)
         .post('/clients')
         .send({ name: 'Client 1', email: 'client1@test.com' });
-      
+
       await request(app)
         .post('/clients')
         .send({ name: 'Client 2', email: 'client2@test.com' });
-      
+
       await request(app)
         .post('/clients')
         .send({ name: 'Client 3', company: 'Company 3' });
@@ -164,7 +164,7 @@ describe('Client Endpoints', () => {
 
       expect(response.body.success).toBe(true);
       expect(response.body.clients).toHaveLength(3);
-      
+
       // Verify clients are ordered by created_at descending (most recent first)
       const clients = response.body.clients;
       expect(clients[0].name).toBe('Client 3');
@@ -236,11 +236,11 @@ describe('Client Endpoints', () => {
 
     it('should return 400 if ID is empty', async () => {
       const response = await request(app)
-        .get('/clients/ ')
-        .expect(404); // Express router treats this as not found
+        .get('/clients/%20')
+        .expect(400); // Express router treats this as not found
 
-      // This will match the 404 handler
-      expect(response.body.error).toBe('Not found');
+      // This will match the 400 validation handler
+      expect(response.body.error).toBe('Invalid request');
     });
 
     it('should return correct client when multiple clients exist', async () => {
@@ -248,11 +248,11 @@ describe('Client Endpoints', () => {
       await request(app)
         .post('/clients')
         .send({ name: 'Client 1' });
-      
+
       const client2 = await request(app)
         .post('/clients')
         .send({ name: 'Client 2' });
-      
+
       await request(app)
         .post('/clients')
         .send({ name: 'Client 3' });

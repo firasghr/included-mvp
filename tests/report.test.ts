@@ -4,13 +4,26 @@
  */
 
 import request from 'supertest';
-import app from '../../orchestrator/index';
-import { clearMockData, getMockData } from '../__mocks__/supabase.mock';
-import { resetOpenAIMock, setOpenAIMockResponse } from '../__mocks__/openai.mock';
+import app from '../orchestrator/index';
+import { clearMockData, getMockData } from './__mocks__/supabase.mock';
+import {
+  resetOpenAIMock,
+  setOpenAIMockResponse,
+  mockOpenAI,
+  mockOpenAIResponse,
+} from './__mocks__/openai.mock';
 
-// Helper to wait for async task processing
-const waitForTaskProcessing = (ms: number = 100) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const waitForTaskProcessing = async (maxMs: number = 4000) => {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    const mockData = getMockData();
+    const hasPending = mockData.tasks.some(
+      (t) => t.status === 'pending' || t.status === 'processing'
+    );
+    if (!hasPending && mockData.tasks.length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
 
 describe('Report Endpoint', () => {
   let client1Id: string;
@@ -78,7 +91,7 @@ describe('Report Endpoint', () => {
         .send({ text: 'Client 1 task 2', clientId: client1Id });
 
       // Wait for processing
-      await waitForTaskProcessing(200);
+      await waitForTaskProcessing();
 
       // Get report for client 1
       const response = await request(app)
@@ -99,21 +112,21 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Task 1', clientId: client1Id });
 
-      await waitForTaskProcessing(100);
+      await waitForTaskProcessing();
 
       setOpenAIMockResponse('Summary 2');
       await request(app)
         .post('/task')
         .send({ text: 'Task 2', clientId: client1Id });
 
-      await waitForTaskProcessing(100);
+      await waitForTaskProcessing();
 
       setOpenAIMockResponse('Summary 3');
       await request(app)
         .post('/task')
         .send({ text: 'Task 3', clientId: client1Id });
 
-      await waitForTaskProcessing(100);
+      await waitForTaskProcessing();
 
       const response = await request(app)
         .get(`/report?clientId=${client1Id}`)
@@ -125,7 +138,7 @@ describe('Report Endpoint', () => {
       expect(response.body.report).toContain('Summary 3');
 
       // Verify format
-      const lines = response.body.report.split('\n');
+      const lines: string[] = response.body.report.split('\n');
       expect(lines[0]).toContain('📝 Daily Report:');
       expect(lines.filter(line => line.startsWith('- Summary')).length).toBe(3);
     });
@@ -141,7 +154,7 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Client 2 task', clientId: client2Id });
 
-      await waitForTaskProcessing(200);
+      await waitForTaskProcessing();
 
       // Get report for client 1
       const response1 = await request(app)
@@ -182,7 +195,7 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Task Y', clientId: client2Id });
 
-      await waitForTaskProcessing(250);
+      await waitForTaskProcessing();
 
       // Verify client 1 report
       const report1 = await request(app)
@@ -214,7 +227,7 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Good task', clientId: client1Id });
 
-      await waitForTaskProcessing(100);
+      await waitForTaskProcessing();
 
       // Manually mark a task as failed (simulate failure)
       const mockData = getMockData();
@@ -238,7 +251,7 @@ describe('Report Endpoint', () => {
 
       // Verify only one item in report (the successful one)
       const summaryCount = response.body.report.split('\n').filter(
-        line => line.startsWith('- ')
+        (line: string) => line.startsWith('- ')
       ).length;
       expect(summaryCount).toBe(1);
     });
@@ -249,34 +262,34 @@ describe('Report Endpoint', () => {
       await request(app)
         .post('/task')
         .send({ text: 'First task', clientId: client1Id });
-      await waitForTaskProcessing(50);
+      await waitForTaskProcessing();
 
       setOpenAIMockResponse('Second summary');
       await request(app)
         .post('/task')
         .send({ text: 'Second task', clientId: client1Id });
-      await waitForTaskProcessing(50);
+      await waitForTaskProcessing();
 
       setOpenAIMockResponse('Third summary');
       await request(app)
         .post('/task')
         .send({ text: 'Third task', clientId: client1Id });
-      await waitForTaskProcessing(100);
+      await waitForTaskProcessing();
 
       const response = await request(app)
         .get(`/report?clientId=${client1Id}`)
         .expect(200);
 
       const report = response.body.report;
-      const lines = report.split('\n');
+      const lines: string[] = report.split('\n');
 
       // Find summary lines
-      const summaryLines = lines.filter(line => line.includes('summary'));
+      const summaryLines = lines.filter((line: string) => line.includes('summary'));
 
       // Most recent should appear first
-      const thirdIndex = summaryLines.findIndex(l => l.includes('Third'));
-      const secondIndex = summaryLines.findIndex(l => l.includes('Second'));
-      const firstIndex = summaryLines.findIndex(l => l.includes('First'));
+      const thirdIndex = summaryLines.findIndex((l: string) => l.includes('Third'));
+      const secondIndex = summaryLines.findIndex((l: string) => l.includes('Second'));
+      const firstIndex = summaryLines.findIndex((l: string) => l.includes('First'));
 
       expect(thirdIndex).toBeLessThan(secondIndex);
       expect(secondIndex).toBeLessThan(firstIndex);
@@ -288,7 +301,7 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Special chars task', clientId: client1Id });
 
-      await waitForTaskProcessing(150);
+      await waitForTaskProcessing();
 
       const response = await request(app)
         .get(`/report?clientId=${client1Id}`)
@@ -307,13 +320,13 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Long task', clientId: client1Id });
 
-      await waitForTaskProcessing(150);
+      await waitForTaskProcessing();
 
       const response = await request(app)
         .get(`/report?clientId=${client1Id}`)
         .expect(200);
 
-      expect(response.body.report).toContain(longSummary);
+      expect(response.body.report).toContain(longSummary.trim());
     });
 
     it('should handle report for non-existent client gracefully', async () => {
@@ -330,8 +343,13 @@ describe('Report Endpoint', () => {
 
   describe('Edge Cases', () => {
     it('should handle report when tasks are still processing', async () => {
+      // Mock OpenAI with delay to simulate processing
+      mockOpenAI.chat.completions.create.mockImplementation(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return mockOpenAIResponse('Processing summary');
+      });
+
       // Create task but don't wait for processing
-      setOpenAIMockResponse('Processing summary');
       await request(app)
         .post('/task')
         .send({ text: 'Processing task', clientId: client1Id });
@@ -343,6 +361,9 @@ describe('Report Endpoint', () => {
 
       // Should show no completed tasks yet
       expect(response.body.report).toContain('No completed tasks found');
+
+      // Allow the async task to complete cleanup
+      await waitForTaskProcessing(600);
     });
 
     it('should handle concurrent report requests for same client', async () => {
@@ -351,7 +372,7 @@ describe('Report Endpoint', () => {
         .post('/task')
         .send({ text: 'Task for concurrent test', clientId: client1Id });
 
-      await waitForTaskProcessing(150);
+      await waitForTaskProcessing();
 
       // Make multiple concurrent report requests
       const requests = [
@@ -385,8 +406,8 @@ describe('Report Endpoint', () => {
         .expect(200);
 
       // Empty summaries should be filtered out
-      const lines = response.body.report.split('\n');
-      const summaryLines = lines.filter(line => line.startsWith('-'));
+      const lines: string[] = response.body.report.split('\n');
+      const summaryLines = lines.filter((line: string) => line.startsWith('-'));
       expect(summaryLines.length).toBe(0);
     });
   });

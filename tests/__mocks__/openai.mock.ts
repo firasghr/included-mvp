@@ -31,7 +31,7 @@ jest.mock('openai', () => {
 });
 
 export const resetOpenAIMock = () => {
-  mockOpenAI.chat.completions.create.mockClear();
+  mockOpenAI.chat.completions.create.mockReset();
   mockOpenAI.chat.completions.create.mockResolvedValue(
     mockOpenAIResponse('This is a test summary of the input text.')
   );

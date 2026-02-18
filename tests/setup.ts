@@ -15,11 +15,11 @@ process.env.NODE_ENV = 'test';
 
 // Suppress console output during tests unless debugging
 global.console = {
-  ...console,
-  log: jest.fn(),
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  // Keep error for debugging
-  error: console.error,
+    ...console,
+    log: jest.fn(),
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    // Keep error for debugging
+    error: console.error,
 };
