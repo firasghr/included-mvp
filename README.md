@@ -11,11 +11,18 @@ Private AI assistant for SMBs to automate emails, documents, CRM updates, and re
 ## Architecture
 
 ```
+database/
+└── supabase.ts          # Supabase client with lazy initialization
+
 orchestrator/
-├── index.ts              # Main Express server
-├── supabase.ts          # Supabase client and database operations
-├── llmWorker.ts         # LLM processing worker
+└── index.ts             # Main Express server
+
+workers/
+├── llmWorker.ts         # OpenAI GPT-4o-mini LLM processing worker
 └── automationWorker.ts  # Automation and reporting worker
+
+types/
+└── task.ts              # TypeScript type definitions
 ```
 
 ## API Endpoints
@@ -44,19 +51,10 @@ Creates and processes a new task with LLM.
 Generates a daily report of all tasks.
 
 **Response:**
-```json
-{
-  "success": true,
-  "report": {
-    "date": "2024-01-01",
-    "totalTasks": 10,
-    "completedTasks": 8,
-    "failedTasks": 1,
-    "pendingTasks": 1,
-    "successRate": 80,
-    "summary": "Daily Report: 10 total tasks. 8 completed (80.0% success rate). 1 failed. 1 pending/processing."
-  }
-}
+```
+Daily Report:
+- Summary of email: The team needs to schedule a meeting next week to discuss Q1 results and plan for Q2. Team members should share their availability.
+- Summary of document: AI trends in 2024 include increased adoption of large language models, improved multimodal AI capabilities, and focus on AI safety and alignment.
 ```
 
 ### GET /health
@@ -98,22 +96,20 @@ cp .env.example .env
 
 Edit `.env` with your configuration:
 ```env
-PORT=3000
 SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_anon_key
-LLM_API_KEY=your_llm_api_key
-LLM_MODEL=gpt-4
+SUPABASE_KEY=your_supabase_key
+OPENAI_API_KEY=your_openai_key
+PORT=3000
 ```
 
 4. Create Supabase table:
 ```sql
 CREATE TABLE tasks (
   id UUID PRIMARY KEY,
-  input_text TEXT NOT NULL,
-  output_text TEXT,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-  created_at TIMESTAMPTZ NOT NULL,
-  updated_at TIMESTAMPTZ NOT NULL
+  input TEXT NOT NULL,
+  output TEXT,
+  status TEXT NOT NULL CHECK (status IN ('processing', 'done', 'failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 ```
 

@@ -18,7 +18,7 @@ export async function processWithLLM(input: string): Promise<string> {
     });
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', // Using gpt-4o-mini as GPT-5-mini equivalent
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
