@@ -1,5 +1,7 @@
 import supabase from '../database/supabase';
 
+const REPORT_PREFIX = '📝 Daily Report:';
+
 /**
  * Generate a daily report of completed tasks
  * @returns Text report with all completed task outputs
@@ -17,10 +19,10 @@ export async function generateReport(): Promise<string> {
     }
 
     if (!tasks || tasks.length === 0) {
-      return '📝 Daily Report:\n- No completed tasks found.';
+      return `${REPORT_PREFIX}\n- No completed tasks found.`;
     }
 
-    let report = '📝 Daily Report:';
+    let report = REPORT_PREFIX;
     
     for (const task of tasks) {
       if (task.output) {
@@ -32,6 +34,6 @@ export async function generateReport(): Promise<string> {
   } catch (error) {
     console.error('Error generating report:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return `📝 Daily Report:\n- Error generating report: ${errorMessage}`;
+    return `${REPORT_PREFIX}\n- Error generating report: ${errorMessage}`;
   }
 }
