@@ -266,4 +266,56 @@ describe('Email Service', () => {
       expect(content).toBeNull();
     });
   });
+
+  describe('HTML escaping', () => {
+    it('should escape HTML special characters in email content', async () => {
+      const mockData = getMockData();
+      
+      // Add test client with XSS attempt in name
+      mockData.clients.push({
+        id: 'client-1',
+        name: '<script>alert("XSS")</script>',
+        email: 'client@example.com',
+        created_at: new Date().toISOString(),
+      });
+
+      // Add test summary with HTML characters
+      mockData.summaries.push({
+        id: 'summary-1',
+        client_id: 'client-1',
+        task_id: 'task-1',
+        summary: 'Summary with <b>HTML</b> & "quotes"',
+        created_at: new Date().toISOString(),
+      });
+
+      // Add notification
+      mockData.notification_events.push({
+        id: 'notif-1',
+        client_id: 'client-1',
+        summary_id: 'summary-1',
+        type: 'email',
+        status: 'pending',
+        created_at: new Date().toISOString(),
+      });
+
+      // Mock the sendEmail method to capture HTML
+      let capturedHtml = '';
+      emailService.sendEmail = jest.fn().mockImplementation((to, subject, html) => {
+        capturedHtml = html;
+        return Promise.resolve({ id: 'test-id' });
+      });
+
+      await emailService.processEmailNotification(mockData.notification_events[0]);
+
+      // Verify HTML is escaped
+      expect(capturedHtml).toContain('&lt;script&gt;alert(&quot;XSS&quot;)&lt;&#x2F;script&gt;');
+      expect(capturedHtml).toContain('&lt;b&gt;HTML&lt;&#x2F;b&gt;');
+      expect(capturedHtml).toContain('&amp;');
+      expect(capturedHtml).toContain('&quot;quotes&quot;');
+      
+      // Verify it doesn't contain unescaped HTML
+      expect(capturedHtml).not.toContain('<script>alert("XSS")</script>');
+      expect(capturedHtml).not.toContain('Summary with <b>HTML</b>');
+    });
+  });
 });

@@ -137,6 +137,7 @@ export class EmailService {
     maxRetries: number = 3,
     baseDelayMs: number = 1000
   ): Promise<T> {
+    const MAX_DELAY_MS = 10000; // 10 seconds maximum delay
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -149,8 +150,8 @@ export class EmailService {
 
         // If this is not the last attempt, wait before retrying
         if (attempt < maxRetries) {
-          // Exponential backoff: 1s, 2s, 4s, 8s, ... (capped at 10 seconds)
-          const delayMs = Math.min(baseDelayMs * Math.pow(2, attempt - 1), 10000);
+          // Exponential backoff: 1s, 2s, 4s, 8s, ... (capped at MAX_DELAY_MS)
+          const delayMs = Math.min(baseDelayMs * Math.pow(2, attempt - 1), MAX_DELAY_MS);
           console.log(`Retrying in ${delayMs}ms...`);
           await new Promise(resolve => setTimeout(resolve, delayMs));
         }
@@ -243,6 +244,24 @@ export class EmailService {
   }
 
   /**
+   * Escape HTML special characters to prevent XSS
+   * 
+   * @param text - Text to escape
+   * @returns HTML-safe text
+   */
+  private escapeHtml(text: string): string {
+    const htmlEscapeMap: { [key: string]: string } = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#x27;',
+      '/': '&#x2F;',
+    };
+    return text.replace(/[&<>"'/]/g, (char) => htmlEscapeMap[char] || char);
+  }
+
+  /**
    * Process a single email notification event
    * Fetches client info, sends email, and updates status
    * 
@@ -268,7 +287,7 @@ export class EmailService {
       }
 
       // Construct email HTML
-      const subject = `Task Summary Update - ${summaryData.clientName}`;
+      const subject = `Task Summary Update - ${this.escapeHtml(summaryData.clientName)}`;
       const html = `
 <!DOCTYPE html>
 <html>
@@ -279,12 +298,12 @@ export class EmailService {
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
   <div style="background-color: #f4f4f4; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
     <h1 style="color: #2c3e50; margin-top: 0;">Task Summary Update</h1>
-    <p style="margin-bottom: 0;">Hello ${summaryData.clientName},</p>
+    <p style="margin-bottom: 0;">Hello ${this.escapeHtml(summaryData.clientName)},</p>
   </div>
   
   <div style="background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
     <h2 style="color: #34495e; margin-top: 0;">Summary</h2>
-    <p style="font-size: 16px; line-height: 1.8;">${summaryData.summary}</p>
+    <p style="font-size: 16px; line-height: 1.8;">${this.escapeHtml(summaryData.summary)}</p>
   </div>
   
   <div style="background-color: #f9f9f9; border-radius: 5px; padding: 15px; font-size: 14px; color: #777;">

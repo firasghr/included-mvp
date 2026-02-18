@@ -92,8 +92,13 @@ export async function processPendingEmails(batchSize: number = 10): Promise<{
     console.log('Email Worker: Batch Processing Complete');
     console.log('========================================');
     console.log(`Total processed: ${stats.processed}`);
-    console.log(`Successful: ${stats.successful} (${Math.round(stats.successful / stats.processed * 100)}%)`);
-    console.log(`Failed: ${stats.failed} (${Math.round(stats.failed / stats.processed * 100)}%)`);
+    if (stats.processed > 0) {
+      console.log(`Successful: ${stats.successful} (${Math.round(stats.successful / stats.processed * 100)}%)`);
+      console.log(`Failed: ${stats.failed} (${Math.round(stats.failed / stats.processed * 100)}%)`);
+    } else {
+      console.log(`Successful: ${stats.successful}`);
+      console.log(`Failed: ${stats.failed}`);
+    }
     console.log('========================================\n');
 
   } catch (error) {
@@ -130,13 +135,16 @@ export async function startEmailWorker(batchSize: number = 10, intervalMs: numbe
   }
 
   // Then continue polling at intervals
-  setInterval(async () => {
-    try {
-      await processPendingEmails(batchSize);
-    } catch (error) {
-      console.error('Error in scheduled processing:', error);
-      // Continue processing despite errors
-    }
+  setInterval(() => {
+    // Wrap in async IIFE to properly handle errors
+    (async () => {
+      try {
+        await processPendingEmails(batchSize);
+      } catch (error) {
+        console.error('Error in scheduled processing:', error);
+        // Continue processing despite errors
+      }
+    })();
   }, intervalMs);
 }
 
