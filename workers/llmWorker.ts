@@ -4,8 +4,12 @@ let openaiInstance: OpenAI | null = null;
 
 function getOpenAI(): OpenAI {
   if (!openaiInstance) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
     openaiInstance = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      apiKey
     });
   }
   return openaiInstance;
@@ -40,7 +44,8 @@ Your task:
       temperature: 0.2
     });
 
-    return response.choices[0].message.content || "Error processing input.";
+    const content = response.choices?.[0]?.message?.content;
+    return content || "Error processing input.";
   } catch (err) {
     console.error("LLM error:", err);
     return "Error processing input.";
