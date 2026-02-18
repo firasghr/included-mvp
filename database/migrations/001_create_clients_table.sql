@@ -8,6 +8,12 @@ CREATE TABLE clients (
 );
 
 -- Add client_id to tasks table
+-- Note: This migration adds client_id as nullable initially to support existing data.
+-- For new installations: After running this migration, you should:
+--   1. Create default client(s) if you have existing tasks
+--   2. Update all existing tasks with appropriate client_id values
+--   3. Optionally run: ALTER TABLE tasks ALTER COLUMN client_id SET NOT NULL;
+-- For new installations without existing data, client_id will be required at the application level.
 ALTER TABLE tasks
 ADD COLUMN client_id UUID REFERENCES clients(id) ON DELETE CASCADE;
 

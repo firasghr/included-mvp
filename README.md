@@ -113,7 +113,7 @@ PORT=3000
 
 4. Create Supabase tables:
 
-Run the migration script in your Supabase SQL editor:
+**For new installations**, run this SQL in your Supabase SQL editor:
 
 ```sql
 -- Create clients table
@@ -140,9 +140,10 @@ CREATE INDEX idx_tasks_client_id ON tasks(client_id);
 CREATE INDEX idx_tasks_client_status ON tasks(client_id, status);
 ```
 
-Or use the migration file:
+**For existing installations** with data, see the migration guide:
 ```bash
 cat database/migrations/001_create_clients_table.sql
+# Also see MULTI_CLIENT_ARCHITECTURE.md for detailed migration steps
 ```
 
 ### Running the Server
