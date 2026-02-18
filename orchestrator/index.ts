@@ -17,14 +17,14 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Request logging middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
   next();
 });
 
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
@@ -118,7 +118,7 @@ async function processTaskAsync(taskId: string, inputText: string): Promise<void
  * GET /report
  * Generates a daily report using automation worker
  */
-app.get('/report', async (req: Request, res: Response) => {
+app.get('/report', async (_req: Request, res: Response) => {
   try {
     console.log('Generating daily report...');
     const report = await automationWorker.generateReport();
@@ -147,7 +147,7 @@ app.use((req: Request, res: Response) => {
 });
 
 // Global error handler
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     error: 'Internal server error',
