@@ -1,9 +1,9 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
-import { createTask, updateTask } from './supabase';
-import { processWithLLM } from './llmWorker';
-import * as automationWorker from './automationWorker';
+import supabase from '../database/supabase';
+import { processWithLLM } from '../workers/llmWorker';
+import { generateReport } from '../workers/automationWorker';
 
 // Load environment variables
 dotenv.config();
@@ -48,11 +48,25 @@ app.post('/task', async (req: Request, res: Response) => {
     const taskId = uuidv4();
 
     // Create task in database
-    const task = await createTask(taskId, text);
-    console.log(`Task created: ${taskId}`);
+    const { data: task, error: insertError } = await supabase()
+      .from('tasks')
+      .insert([
+        {
+          id: taskId,
+          input: text,
+          output: null,
+          status: 'processing',
+          created_at: new Date().toISOString(),
+        },
+      ])
+      .select()
+      .single();
 
-    // Update task status to processing
-    await updateTask(taskId, { status: 'processing' });
+    if (insertError) {
+      throw new Error(`Failed to create task: ${insertError.message}`);
+    }
+
+    console.log(`Task created: ${taskId}`);
 
     // Process with LLM (non-blocking - could be moved to background queue in production)
     processTaskAsync(taskId, text);
@@ -82,32 +96,42 @@ app.post('/task', async (req: Request, res: Response) => {
 async function processTaskAsync(taskId: string, inputText: string): Promise<void> {
   try {
     // Process with LLM
-    const result = await processWithLLM(inputText);
+    const output = await processWithLLM(inputText);
 
-    if (result.success) {
-      // Update task with output
-      await updateTask(taskId, {
-        output_text: result.output,
-        status: 'completed',
-      });
-      console.log(`Task completed: ${taskId}`);
-    } else {
+    // Check if there was an error
+    if (output === 'Error processing input.') {
       // Update task as failed
-      await updateTask(taskId, {
-        output_text: result.error || 'Processing failed',
-        status: 'failed',
-      });
-      console.error(`Task failed: ${taskId} - ${result.error}`);
+      await supabase()
+        .from('tasks')
+        .update({
+          output,
+          status: 'failed',
+        })
+        .eq('id', taskId);
+      console.error(`Task failed: ${taskId}`);
+    } else {
+      // Update task with output
+      await supabase()
+        .from('tasks')
+        .update({
+          output,
+          status: 'done',
+        })
+        .eq('id', taskId);
+      console.log(`Task completed: ${taskId}`);
     }
   } catch (error) {
     console.error(`Error processing task ${taskId}:`, error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     
     try {
-      await updateTask(taskId, {
-        output_text: `Error: ${errorMessage}`,
-        status: 'failed',
-      });
+      await supabase()
+        .from('tasks')
+        .update({
+          output: `Error: ${errorMessage}`,
+          status: 'failed',
+        })
+        .eq('id', taskId);
     } catch (updateError) {
       console.error(`Failed to update task status: ${updateError}`);
     }
@@ -121,12 +145,9 @@ async function processTaskAsync(taskId: string, inputText: string): Promise<void
 app.get('/report', async (_req: Request, res: Response) => {
   try {
     console.log('Generating daily report...');
-    const report = await automationWorker.generateReport();
+    const report = await generateReport();
 
-    return res.status(200).json({
-      success: true,
-      report,
-    });
+    return res.status(200).send(report);
   } catch (error) {
     console.error('Error generating report:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
