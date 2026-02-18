@@ -4,36 +4,129 @@ Private AI assistant for SMBs to automate emails, documents, CRM updates, and re
 
 ## Features
 
-- **Task Processing**: Automated LLM-powered task processing with database persistence
-- **Daily Reporting**: Automated generation of daily task reports
+- **Multi-Client Architecture**: Complete data isolation between clients with client-specific tasks and reports
+- **Client Management**: Create and manage multiple clients with company information
+- **Task Processing**: Automated LLM-powered task processing with robust lifecycle management (pending → processing → completed/failed)
+- **Summary Storage**: Dedicated summaries table for storing LLM-generated summaries
+- **Daily Reporting**: Automated generation of daily task reports filtered by client
+- **Notification-Ready**: Built-in notification event system (email, WhatsApp) ready for integration
+- **Clean Architecture**: Separation of concerns with controllers, services, routes, and middleware
+- **Retry Logic**: Automatic retry with exponential backoff for LLM processing
 - **Production-Ready**: Built with TypeScript, Express, and Supabase for scalability
 
 ## Architecture
 
+The backend follows clean architecture principles with clear separation of concerns:
+
 ```
+controllers/
+├── clientController.ts    # Client endpoint handlers
+├── taskController.ts      # Task endpoint handlers
+└── reportController.ts    # Report endpoint handlers
+
+routes/
+├── clientRoutes.ts        # Client route definitions
+├── taskRoutes.ts          # Task route definitions
+└── reportRoutes.ts        # Report route definitions
+
+services/
+├── clientService.ts       # Client business logic
+├── taskService.ts         # Task business logic
+├── summaryService.ts      # Summary business logic
+├── notificationService.ts # Notification event management
+└── reportService.ts       # Report generation logic
+
+lib/
+└── middleware.ts          # Express middleware (logging, error handling)
+
 database/
-└── supabase.ts          # Supabase client with lazy initialization
+├── supabase.ts            # Supabase client with lazy initialization
+└── migrations/            # SQL migration scripts
 
 orchestrator/
-└── index.ts             # Main Express server
+└── index.ts               # Main Express server
 
 workers/
-├── llmWorker.ts         # OpenAI GPT-4o-mini LLM processing worker
-└── automationWorker.ts  # Automation and reporting worker
+├── llmWorker.ts           # OpenAI GPT-4o-mini LLM processing with retry logic
+└── automationWorker.ts    # Background task processing worker
 
 types/
-└── task.ts              # TypeScript type definitions
+└── task.ts                # TypeScript type definitions
 ```
 
 ## API Endpoints
 
-### POST /task
-Creates and processes a new task with LLM.
+### POST /clients
+Create a new client.
 
 **Request:**
 ```json
 {
-  "text": "Your input text here"
+  "name": "Acme Corporation",
+  "email": "contact@acme.com",
+  "company": "Acme Corp"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "client": {
+    "id": "uuid",
+    "name": "Acme Corporation",
+    "email": "contact@acme.com",
+    "company": "Acme Corp",
+    "created_at": "2024-01-01T00:00:00.000Z",
+    "updated_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### GET /clients
+Get all clients.
+
+**Response:**
+```json
+{
+  "success": true,
+  "clients": [
+    {
+      "id": "uuid",
+      "name": "Acme Corporation",
+      "email": "contact@acme.com",
+      "company": "Acme Corp",
+      "created_at": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+### GET /clients/:id
+Get a single client by ID.
+
+**Response:**
+```json
+{
+  "success": true,
+  "client": {
+    "id": "uuid",
+    "name": "Acme Corporation",
+    "email": "contact@acme.com",
+    "company": "Acme Corp",
+    "created_at": "2024-01-01T00:00:00.000Z"
+  }
+}
+```
+
+### POST /task
+Creates and processes a new task with LLM for a specific client.
+
+**Request:**
+```json
+{
+  "text": "Your input text here",
+  "clientId": "client-uuid-here"
 }
 ```
 
@@ -42,19 +135,26 @@ Creates and processes a new task with LLM.
 {
   "success": true,
   "taskId": "uuid",
-  "status": "processing",
-  "message": "Task created and processing started"
+  "status": "processing"
 }
 ```
 
 ### GET /report
-Generates a daily report of all tasks.
+Generates a daily report of all tasks for a specific client.
+
+**Query Parameters:**
+- `clientId` (required): The UUID of the client
+
+**Example:**
+```
+GET /report?clientId=client-uuid-here
+```
 
 **Response:**
-```
-Daily Report:
-- Summary of email: The team needs to schedule a meeting next week to discuss Q1 results and plan for Q2. Team members should share their availability.
-- Summary of document: AI trends in 2024 include increased adoption of large language models, improved multimodal AI capabilities, and focus on AI safety and alignment.
+```json
+{
+  "report": "📝 Daily Report:\n- Summary of email: The team needs to schedule a meeting next week to discuss Q1 results and plan for Q2. Team members should share their availability.\n- Summary of document: AI trends in 2024 include increased adoption of large language models, improved multimodal AI capabilities, and focus on AI safety and alignment."
+}
 ```
 
 ### GET /health
@@ -102,15 +202,65 @@ OPENAI_API_KEY=your_openai_key
 PORT=3000
 ```
 
-4. Create Supabase table:
+4. Create Supabase tables:
+
+**For new installations**, run this SQL in your Supabase SQL editor:
+
 ```sql
+-- Create clients table
+CREATE TABLE clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  email TEXT,
+  company TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create tasks table
 CREATE TABLE tasks (
   id UUID PRIMARY KEY,
   input TEXT NOT NULL,
   output TEXT,
-  status TEXT NOT NULL CHECK (status IN ('processing', 'done', 'failed')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Create summaries table
+CREATE TABLE summaries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  summary TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create notification_events table
+CREATE TABLE notification_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  summary_id UUID NOT NULL REFERENCES summaries(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('email', 'whatsapp')),
+  status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')) DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create indexes for better query performance
+CREATE INDEX idx_tasks_client_id ON tasks(client_id);
+CREATE INDEX idx_tasks_client_status ON tasks(client_id, status);
+CREATE INDEX idx_summaries_task_id ON summaries(task_id);
+CREATE INDEX idx_summaries_client_id ON summaries(client_id);
+CREATE INDEX idx_notification_events_client_id ON notification_events(client_id);
+CREATE INDEX idx_notification_events_status ON notification_events(status);
+CREATE INDEX idx_notification_events_summary_id ON notification_events(summary_id);
+```
+
+**For existing installations** with data, see the migration guide:
+```bash
+cat database/migrations/001_create_clients_table.sql
+# Also see MULTI_CLIENT_ARCHITECTURE.md for detailed migration steps
 ```
 
 ### Running the Server
