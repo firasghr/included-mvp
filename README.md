@@ -5,8 +5,9 @@ Private AI assistant for SMBs to automate emails, documents, CRM updates, and re
 ## Features
 
 - **Multi-Client Architecture**: Complete data isolation between clients with client-specific tasks and reports
-- **Client Management**: Create and manage multiple clients with company information
+- **Client Management**: Create and manage multiple clients with company information; each client gets a unique inbound email address
 - **Task Processing**: Automated LLM-powered task processing with robust lifecycle management (pending → processing → completed/failed)
+- **Inbound Email Ingestion**: Receive inbound emails via Resend webhook and automatically route them to the correct client for processing
 - **Email-to-Task Automation**: Webhook endpoint to automatically convert incoming emails into tasks for processing
 - **Summary Storage**: Dedicated summaries table for storing LLM-generated summaries
 - **Daily Reporting**: Automated generation of daily task reports filtered by client
@@ -31,15 +32,17 @@ routes/
 ├── clientRoutes.ts        # Client route definitions
 ├── taskRoutes.ts          # Task route definitions
 ├── reportRoutes.ts        # Report route definitions
-└── emailWebhook.ts        # Email webhook route definitions
+├── emailWebhook.ts        # Email webhook route definitions
+└── inboundEmailRoutes.ts  # Resend inbound email webhook route
 
 services/
-├── clientService.ts       # Client business logic
+├── clientService.ts       # Client business logic (with inbound email address generation)
 ├── taskService.ts         # Task business logic
 ├── summaryService.ts      # Summary business logic
 ├── notificationService.ts # Notification event management
 ├── emailService.ts        # Email sending with Resend API
 ├── emailSyncService.ts    # Email-to-task conversion service
+├── inboundEmailService.ts # Inbound email ingestion and client routing
 └── reportService.ts       # Report generation logic
 
 lib/
@@ -84,6 +87,7 @@ Create a new client.
     "name": "Acme Corporation",
     "email": "contact@acme.com",
     "company": "Acme Corp",
+    "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
     "created_at": "2024-01-01T00:00:00.000Z",
     "updated_at": "2024-01-01T00:00:00.000Z"
   }
@@ -103,6 +107,7 @@ Get all clients.
       "name": "Acme Corporation",
       "email": "contact@acme.com",
       "company": "Acme Corp",
+      "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
       "created_at": "2024-01-01T00:00:00.000Z"
     }
   ]
@@ -121,6 +126,7 @@ Get a single client by ID.
     "name": "Acme Corporation",
     "email": "contact@acme.com",
     "company": "Acme Corp",
+    "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
     "created_at": "2024-01-01T00:00:00.000Z"
   }
 }
@@ -198,6 +204,27 @@ Convert incoming emails into tasks for processing.
 }
 ```
 
+### POST /webhooks/resend-inbound
+Receive inbound emails from the Resend webhook and route them to the correct client for processing. The recipient address encodes the client ID in the form `client_<uuid>@<INBOUND_EMAIL_DOMAIN>`.
+
+**Request (sent by Resend):**
+```json
+{
+  "from": "sender@example.com",
+  "to": "client_<uuid>@included.yourdomain.com",
+  "subject": "Email Subject",
+  "text": "Plain-text email body",
+  "html": "<p>HTML email body</p>"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true
+}
+```
+
 ## Setup
 
 ### Prerequisites
@@ -231,6 +258,7 @@ SUPABASE_KEY=your_supabase_key
 OPENAI_API_KEY=your_openai_key
 RESEND_API_KEY=your_resend_api_key
 FROM_EMAIL=noreply@yourdomain.com
+INBOUND_EMAIL_DOMAIN=included.yourdomain.com
 PORT=3000
 ```
 
@@ -245,6 +273,7 @@ CREATE TABLE clients (
   name TEXT NOT NULL,
   email TEXT,
   company TEXT,
+  inbound_email TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -257,6 +286,19 @@ CREATE TABLE tasks (
   status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
   client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create emails table (inbound emails received via Resend webhook)
+CREATE TABLE emails (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  body TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
+  source TEXT NOT NULL CHECK (source IN ('inbound')) DEFAULT 'inbound',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create summaries table
@@ -284,6 +326,8 @@ CREATE INDEX idx_tasks_client_id ON tasks(client_id);
 CREATE INDEX idx_tasks_client_status ON tasks(client_id, status);
 CREATE INDEX idx_summaries_task_id ON summaries(task_id);
 CREATE INDEX idx_summaries_client_id ON summaries(client_id);
+CREATE INDEX idx_emails_client_id ON emails(client_id);
+CREATE INDEX idx_emails_status ON emails(status);
 CREATE INDEX idx_notification_events_client_id ON notification_events(client_id);
 CREATE INDEX idx_notification_events_status ON notification_events(status);
 CREATE INDEX idx_notification_events_summary_id ON notification_events(summary_id);
@@ -429,6 +473,41 @@ curl -X POST http://localhost:3000/email-webhook \
 4. Task enters the normal processing pipeline (pending → processing → completed)
 5. LLM processes the email content
 6. Summary is generated and notifications are sent
+
+## Inbound Email Ingestion (Resend Webhook)
+
+The inbound email ingestion system lets real email senders send emails directly to a per-client address. Resend delivers the email to your server as a webhook, and the system automatically routes it to the right client.
+
+### How It Works
+
+1. When a client is created, they receive a unique inbound email address in the form:
+   ```
+   client_<uuid>@<INBOUND_EMAIL_DOMAIN>
+   ```
+2. Configure Resend to forward inbound emails for your domain to `POST /webhooks/resend-inbound`.
+3. When an email arrives, `InboundEmailService` extracts the client UUID from the `to` address, validates the client, persists an `emails` record (status=`pending`, source=`inbound`), and non-blockingly triggers the standard task → summary → notification pipeline.
+
+### Features
+- ✅ **Resend Webhook Integration**: Accepts Resend inbound email webhooks at `POST /webhooks/resend-inbound`
+- ✅ **Automatic Client Routing**: Routes each email to the correct client via the `to` address
+- ✅ **Email Record Persistence**: Stores every inbound email in the `emails` table
+- ✅ **Pipeline Trigger**: Automatically kicks off task → summary → notification processing
+- ✅ **Fault Tolerant**: Pipeline failures are logged but do not affect the HTTP response
+
+### Setup
+
+1. Set `INBOUND_EMAIL_DOMAIN` in your `.env` to the domain you've configured in Resend (e.g. `included.yourdomain.com`).
+2. In the Resend dashboard, add an inbound route that delivers to `https://your-server/webhooks/resend-inbound`.
+3. Create a client via `POST /clients`; the response will include the `inbound_email` address to share with the sender.
+
+### Workflow
+1. Sender sends an email to `client_<uuid>@included.yourdomain.com`
+2. Resend delivers the payload to `POST /webhooks/resend-inbound`
+3. `InboundEmailService` extracts the client UUID from the `to` field
+4. Client is validated against the database
+5. An `emails` record is persisted (status=`pending`, source=`inbound`)
+6. The task → summary → notification pipeline is triggered asynchronously
+7. HTTP `200 { success: true }` is returned immediately
 
 ## Development
 
