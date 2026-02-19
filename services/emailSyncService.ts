@@ -56,7 +56,7 @@ export class EmailSyncService {
         return null;
       }
 
-      if (!emailData.subject || typeof emailData.subject !== 'string') {
+      if (!emailData.subject || typeof emailData.subject !== 'string' || emailData.subject.trim().length === 0) {
         console.error('Invalid email data: missing or invalid subject');
         return null;
       }

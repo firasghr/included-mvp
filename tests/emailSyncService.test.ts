@@ -157,6 +157,27 @@ describe('EmailSyncService', () => {
       consoleSpy.mockRestore();
     });
 
+    it('should log errors and return null for whitespace-only subject', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      const emailData: EmailData = {
+        clientId: 'client-123',
+        sender: 'test@example.com',
+        subject: '   ',
+        body: 'Email body',
+      };
+
+      const result = await emailSyncService.processIncomingEmail(emailData);
+
+      expect(result).toBeNull();
+      expect(mockCreateTask).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('missing or invalid subject')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
     it('should log errors and return null for missing body', async () => {
       const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 

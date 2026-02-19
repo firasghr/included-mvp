@@ -35,11 +35,11 @@ router.post('/', async (req: Request, res: Response): Promise<Response> => {
       });
     }
 
-    if (!subject || typeof subject !== 'string') {
+    if (!subject || typeof subject !== 'string' || subject.trim().length === 0) {
       console.error('Email webhook validation failed: missing or invalid subject');
       return res.status(400).json({
         error: 'Invalid payload',
-        message: 'Request body must contain a "subject" field',
+        message: 'Request body must contain a non-empty "subject" field',
       });
     }
 

@@ -175,6 +175,42 @@ describe('Email Webhook Endpoint', () => {
       expect(mockProcessIncomingEmail).not.toHaveBeenCalled();
     });
 
+    it('should return 400 if subject is empty string', async () => {
+      const emailPayload = {
+        clientId: 'client-123',
+        sender: 'test@example.com',
+        subject: '',
+        body: 'Email body',
+      };
+
+      const response = await request(app)
+        .post('/email-webhook')
+        .send(emailPayload)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('error', 'Invalid payload');
+      expect(response.body.message).toContain('subject');
+      expect(mockProcessIncomingEmail).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 if subject is whitespace only', async () => {
+      const emailPayload = {
+        clientId: 'client-123',
+        sender: 'test@example.com',
+        subject: '   ',
+        body: 'Email body',
+      };
+
+      const response = await request(app)
+        .post('/email-webhook')
+        .send(emailPayload)
+        .expect(400);
+
+      expect(response.body).toHaveProperty('error', 'Invalid payload');
+      expect(response.body.message).toContain('subject');
+      expect(mockProcessIncomingEmail).not.toHaveBeenCalled();
+    });
+
     it('should return 400 if body is missing', async () => {
       const emailPayload = {
         clientId: 'client-123',
