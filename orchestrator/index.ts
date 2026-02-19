@@ -41,13 +41,16 @@ if (require.main === module) {
     // Start email worker in background (non-blocking)
     // Import lazily to avoid loading emailService during tests
     console.log('Starting email worker...');
-    import('../workers/emailWorker').then(({ startEmailWorker }) => {
-      startEmailWorker(10, 10000).catch(error => {
+    const BATCH_SIZE = 10; // Number of emails to process per batch
+    const INTERVAL_MS = 10000; // Poll every 10 seconds (10000ms)
+    
+    import('../workers/emailWorker')
+      .then(({ startEmailWorker }) => {
+        return startEmailWorker(BATCH_SIZE, INTERVAL_MS);
+      })
+      .catch(error => {
         console.error('Email worker error:', error);
       });
-    }).catch(error => {
-      console.error('Failed to load email worker:', error);
-    });
   });
 }
 
