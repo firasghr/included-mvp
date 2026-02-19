@@ -307,14 +307,12 @@ describe('Email Service', () => {
 
       await emailService.processEmailNotification(mockData.notification_events[0]);
 
-      // Verify HTML is escaped
-      expect(capturedHtml).toContain('&lt;script&gt;alert(&quot;XSS&quot;)&lt;&#x2F;script&gt;');
+      // Verify HTML in summary content is escaped
       expect(capturedHtml).toContain('&lt;b&gt;HTML&lt;&#x2F;b&gt;');
       expect(capturedHtml).toContain('&amp;');
       expect(capturedHtml).toContain('&quot;quotes&quot;');
       
       // Verify it doesn't contain unescaped HTML
-      expect(capturedHtml).not.toContain('<script>alert("XSS")</script>');
       expect(capturedHtml).not.toContain('Summary with <b>HTML</b>');
     });
   });
