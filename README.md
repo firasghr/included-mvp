@@ -7,9 +7,11 @@ Private AI assistant for SMBs to automate emails, documents, CRM updates, and re
 - **Multi-Client Architecture**: Complete data isolation between clients with client-specific tasks and reports
 - **Client Management**: Create and manage multiple clients with company information
 - **Task Processing**: Automated LLM-powered task processing with robust lifecycle management (pending → processing → completed/failed)
+- **Email-to-Task Automation**: Webhook endpoint to automatically convert incoming emails into tasks for processing
 - **Summary Storage**: Dedicated summaries table for storing LLM-generated summaries
 - **Daily Reporting**: Automated generation of daily task reports filtered by client
 - **Email Notifications**: Robust email notification system with Resend API integration, batch processing, and retry logic
+- **Background Email Worker**: Automatic email worker that starts with the server and processes pending email notifications
 - **Notification-Ready**: Built-in notification event system (email, WhatsApp) ready for integration
 - **Clean Architecture**: Separation of concerns with controllers, services, routes, and middleware
 - **Retry Logic**: Automatic retry with exponential backoff for LLM processing and email sending
@@ -28,7 +30,8 @@ controllers/
 routes/
 ├── clientRoutes.ts        # Client route definitions
 ├── taskRoutes.ts          # Task route definitions
-└── reportRoutes.ts        # Report route definitions
+├── reportRoutes.ts        # Report route definitions
+└── emailWebhook.ts        # Email webhook route definitions
 
 services/
 ├── clientService.ts       # Client business logic
@@ -36,6 +39,7 @@ services/
 ├── summaryService.ts      # Summary business logic
 ├── notificationService.ts # Notification event management
 ├── emailService.ts        # Email sending with Resend API
+├── emailSyncService.ts    # Email-to-task conversion service
 └── reportService.ts       # Report generation logic
 
 lib/
@@ -171,6 +175,29 @@ Health check endpoint.
 }
 ```
 
+### POST /email-webhook
+Convert incoming emails into tasks for processing.
+
+**Request:**
+```json
+{
+  "clientId": "client-uuid-here",
+  "sender": "sender@example.com",
+  "subject": "Email Subject",
+  "body": "Email body content to be processed",
+  "attachments": ["attachment1.pdf", "attachment2.doc"]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "taskId": "uuid",
+  "message": "Email successfully converted to task"
+}
+```
+
 ## Setup
 
 ### Prerequisites
@@ -281,6 +308,8 @@ npm run build
 npm start
 ```
 
+**Note:** The email worker starts automatically in the background when the server starts. It processes pending email notifications every 10 seconds with a batch size of 10 emails.
+
 ## Email Notification System
 
 The email notification system provides robust email sending capabilities with the following features:
@@ -345,6 +374,61 @@ FROM_EMAIL=noreply@yourdomain.com
 ```
 
 Get your Resend API key from [resend.com](https://resend.com).
+
+## Email-to-Task Automation
+
+The email-to-task automation system allows external integrations to send emails directly to the system for processing.
+
+### Features
+- ✅ **Webhook Integration**: Accept incoming emails via POST /email-webhook endpoint
+- ✅ **Automatic Task Creation**: Convert email content to tasks automatically
+- ✅ **Multi-Client Support**: Route emails to specific clients via clientId
+- ✅ **Email Metadata Capture**: Store sender, subject, body, and attachments
+- ✅ **Seamless Processing**: Created tasks follow the same LLM processing pipeline
+
+### Webhook Payload Format
+
+Send a POST request to `/email-webhook` with the following JSON payload:
+
+```json
+{
+  "clientId": "client-uuid-here",
+  "sender": "sender@example.com",
+  "subject": "Email Subject",
+  "body": "Email body content to be processed",
+  "attachments": ["attachment1.pdf", "attachment2.doc"]
+}
+```
+
+### Integration Examples
+
+**Using curl:**
+```bash
+curl -X POST http://localhost:3000/email-webhook \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "550e8400-e29b-41d4-a716-446655440000",
+    "sender": "john@example.com",
+    "subject": "Meeting Request",
+    "body": "Can we schedule a meeting to discuss the Q1 results?",
+    "attachments": []
+  }'
+```
+
+**Integration Options:**
+- **Gmail**: Use Gmail API webhook or forwarding rules
+- **Outlook**: Use Microsoft Graph API webhooks
+- **IMAP**: Poll IMAP servers and forward to webhook
+- **Email Services**: Use services like SendGrid, Mailgun webhooks
+- **Custom Solutions**: Any system that can make HTTP POST requests
+
+### Workflow
+1. External system sends email data to `/email-webhook`
+2. EmailSyncService validates the payload
+3. Task is created with email content as input text
+4. Task enters the normal processing pipeline (pending → processing → completed)
+5. LLM processes the email content
+6. Summary is generated and notifications are sent
 
 ## Development
 
