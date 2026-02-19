@@ -11,11 +11,11 @@ export class EmailService {
   private fromEmail: string;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY;
-    this.fromEmail = process.env.FROM_EMAIL || 'noreply@example.com';
+    const apiKey = process.env.RESEND_API_KEY || process.env.EMAIL_PROVIDER_API_KEY;
+    this.fromEmail = process.env.FROM_EMAIL || 'x@snapaas.com';
 
     if (!apiKey) {
-      throw new Error('RESEND_API_KEY environment variable is not set');
+      throw new Error('RESEND_API_KEY (or EMAIL_PROVIDER_API_KEY) environment variable is not set');
     }
 
     this.resend = new Resend(apiKey);
@@ -64,15 +64,21 @@ export class EmailService {
     try {
       console.log(`Sending email to ${to} with subject: "${subject}"`);
 
+      // Cast response to any to avoid TypeScript errors with unknown type
       const response = await this.resend.emails.send({
         from: this.fromEmail,
         to,
         subject,
         html,
-      });
+      }) as any;
 
-      console.log(`Email sent successfully to ${to}. Message ID: ${response.data?.id}`);
-      return { id: response.data?.id || 'unknown' };
+      if (response.error) {
+        throw new Error(`Resend API Error: ${response.error.message || JSON.stringify(response.error)}`);
+      }
+
+      const id = response.data?.id || 'unknown';
+      console.log(`Email sent successfully to ${to}. Message ID: ${id}`);
+      return { id };
     } catch (error) {
       console.error(`Failed to send email to ${to}:`, error);
       throw error;
@@ -327,7 +333,7 @@ export class EmailService {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error(`✗ Failed to process notification ${event.id}:`, errorMessage);
-      
+
       // Mark as failed
       await this.updateStatus(event.id, 'failed', errorMessage);
       return false;
