@@ -5,6 +5,7 @@ import clientRoutes from '../routes/clientRoutes';
 import taskRoutes from '../routes/taskRoutes';
 import reportRoutes from '../routes/reportRoutes';
 import emailWebhookRoutes from '../routes/emailWebhook';
+import inboundEmailRoutes from '../routes/inboundEmailRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -28,6 +29,7 @@ app.use('/clients', clientRoutes);
 app.use('/task', taskRoutes);
 app.use('/report', reportRoutes);
 app.use('/email-webhook', emailWebhookRoutes);
+app.use('/webhooks/resend-inbound', inboundEmailRoutes);
 
 // Error handling
 app.use(notFoundHandler);
