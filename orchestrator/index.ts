@@ -4,6 +4,7 @@ import { requestLogger, errorHandler, notFoundHandler } from '../lib/middleware'
 import clientRoutes from '../routes/clientRoutes';
 import taskRoutes from '../routes/taskRoutes';
 import reportRoutes from '../routes/reportRoutes';
+import emailWebhookRoutes from '../routes/emailWebhook';
 
 // Load environment variables
 dotenv.config();
@@ -26,6 +27,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/clients', clientRoutes);
 app.use('/task', taskRoutes);
 app.use('/report', reportRoutes);
+app.use('/email-webhook', emailWebhookRoutes);
 
 // Error handling
 app.use(notFoundHandler);
