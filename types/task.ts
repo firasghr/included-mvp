@@ -12,6 +12,19 @@ export interface Client {
   name: string;
   email?: string;
   company?: string;
+  inbound_email?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Email {
+  id: string;
+  client_id: string;
+  sender: string;
+  subject: string;
+  body: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  source: 'inbound';
   created_at?: string;
   updated_at?: string;
 }

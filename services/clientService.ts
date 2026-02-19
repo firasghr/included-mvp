@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import supabase from '../database/supabase';
 import { Client } from '../types/task';
 
@@ -10,13 +11,19 @@ export class ClientService {
    * Create a new client
    */
   async createClient(name: string, email?: string, company?: string): Promise<Client> {
+    const clientId = uuidv4();
+    const inboundEmailDomain = process.env.INBOUND_EMAIL_DOMAIN || 'included.yourdomain.com';
+    const inboundEmail = `client_${clientId}@${inboundEmailDomain}`;
+
     const { data: client, error } = await supabase()
       .from('clients')
       .insert([
         {
+          id: clientId,
           name: name.trim(),
           email: email && typeof email === 'string' ? email.trim() : null,
           company: company && typeof company === 'string' ? company.trim() : null,
+          inbound_email: inboundEmail,
         },
       ])
       .select()

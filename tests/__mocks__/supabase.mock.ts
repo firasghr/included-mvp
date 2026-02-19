@@ -8,6 +8,7 @@ type MockData = {
   tasks: any[];
   summaries: any[];
   notification_events: any[];
+  emails: any[];
 };
 
 const mockData: MockData = {
@@ -15,6 +16,7 @@ const mockData: MockData = {
   tasks: [],
   summaries: [],
   notification_events: [],
+  emails: [],
 };
 
 const createMockQueryBuilder = (table: keyof MockData) => {
@@ -167,6 +169,7 @@ export const clearMockData = () => {
   mockData.tasks = [];
   mockData.summaries = [];
   mockData.notification_events = [];
+  mockData.emails = [];
 };
 
 // Export function to get mock data for assertions
