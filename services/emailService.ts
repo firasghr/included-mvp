@@ -293,29 +293,24 @@ export class EmailService {
       }
 
       // Construct email HTML
-      const subject = `Task Summary Update - ${this.escapeHtml(summaryData.clientName)}`;
+      const subject = 'Included — New Summary Ready';
       const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Task Summary</title>
+  <title>Included — New Summary Ready</title>
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #f4f4f4; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
-    <h1 style="color: #2c3e50; margin-top: 0;">Task Summary Update</h1>
-    <p style="margin-bottom: 0;">Hello ${this.escapeHtml(summaryData.clientName)},</p>
+  <p>Hello,</p>
+  
+  <p>Here is your latest summary:</p>
+  
+  <div style="background-color: #f9f9f9; border-left: 4px solid #2c3e50; padding: 15px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 16px; line-height: 1.6;">${this.escapeHtml(summaryData.summary)}</p>
   </div>
   
-  <div style="background-color: #fff; border: 1px solid #ddd; border-radius: 5px; padding: 20px; margin-bottom: 20px;">
-    <h2 style="color: #34495e; margin-top: 0;">Summary</h2>
-    <p style="font-size: 16px; line-height: 1.8;">${this.escapeHtml(summaryData.summary)}</p>
-  </div>
-  
-  <div style="background-color: #f9f9f9; border-radius: 5px; padding: 15px; font-size: 14px; color: #777;">
-    <p style="margin: 0;">This is an automated notification from Included MVP.</p>
-    <p style="margin: 5px 0 0 0;">Please do not reply to this email.</p>
-  </div>
+  <p style="margin-top: 30px;">Included AI Assistant</p>
 </body>
 </html>
       `.trim();
