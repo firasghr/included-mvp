@@ -4,7 +4,6 @@ import { requestLogger, errorHandler, notFoundHandler } from '../lib/middleware'
 import clientRoutes from '../routes/clientRoutes';
 import taskRoutes from '../routes/taskRoutes';
 import reportRoutes from '../routes/reportRoutes';
-import { startEmailWorker } from '../workers/emailWorker';
 
 // Load environment variables
 dotenv.config();
@@ -40,9 +39,14 @@ if (require.main === module) {
     console.log(`Health check: http://localhost:${PORT}/health`);
     
     // Start email worker in background (non-blocking)
+    // Import lazily to avoid loading emailService during tests
     console.log('Starting email worker...');
-    startEmailWorker(10, 10000).catch(error => {
-      console.error('Email worker error:', error);
+    import('../workers/emailWorker').then(({ startEmailWorker }) => {
+      startEmailWorker(10, 10000).catch(error => {
+        console.error('Email worker error:', error);
+      });
+    }).catch(error => {
+      console.error('Failed to load email worker:', error);
     });
   });
 }
