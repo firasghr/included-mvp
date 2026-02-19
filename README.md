@@ -9,9 +9,10 @@ Private AI assistant for SMBs to automate emails, documents, CRM updates, and re
 - **Task Processing**: Automated LLM-powered task processing with robust lifecycle management (pending → processing → completed/failed)
 - **Summary Storage**: Dedicated summaries table for storing LLM-generated summaries
 - **Daily Reporting**: Automated generation of daily task reports filtered by client
+- **Email Notifications**: Robust email notification system with Resend API integration, batch processing, and retry logic
 - **Notification-Ready**: Built-in notification event system (email, WhatsApp) ready for integration
 - **Clean Architecture**: Separation of concerns with controllers, services, routes, and middleware
-- **Retry Logic**: Automatic retry with exponential backoff for LLM processing
+- **Retry Logic**: Automatic retry with exponential backoff for LLM processing and email sending
 - **Production-Ready**: Built with TypeScript, Express, and Supabase for scalability
 
 ## Architecture
@@ -34,6 +35,7 @@ services/
 ├── taskService.ts         # Task business logic
 ├── summaryService.ts      # Summary business logic
 ├── notificationService.ts # Notification event management
+├── emailService.ts        # Email sending with Resend API
 └── reportService.ts       # Report generation logic
 
 lib/
@@ -48,7 +50,8 @@ orchestrator/
 
 workers/
 ├── llmWorker.ts           # OpenAI GPT-4o-mini LLM processing with retry logic
-└── automationWorker.ts    # Background task processing worker
+├── automationWorker.ts    # Background task processing worker
+└── emailWorker.ts         # Email notification batch processing worker
 
 types/
 └── task.ts                # TypeScript type definitions
@@ -199,6 +202,8 @@ Edit `.env` with your configuration:
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
 OPENAI_API_KEY=your_openai_key
+RESEND_API_KEY=your_resend_api_key
+FROM_EMAIL=noreply@yourdomain.com
 PORT=3000
 ```
 
@@ -275,6 +280,71 @@ npm run dev
 npm run build
 npm start
 ```
+
+## Email Notification System
+
+The email notification system provides robust email sending capabilities with the following features:
+
+### Features
+- ✅ **Batch Processing**: Process notifications in configurable batches (default: 10-20 emails)
+- ✅ **Retry Logic**: Exponential backoff for failed email sends (3 retries with increasing delays)
+- ✅ **Multi-Client Isolation**: Each notification is tied to a specific client_id
+- ✅ **Status Tracking**: Automatic status updates (pending → sent/failed)
+- ✅ **Comprehensive Logging**: Detailed logs for monitoring and debugging
+- ✅ **Resend Integration**: Uses Resend API for reliable email delivery
+
+### Usage
+
+#### Manual Processing
+Process pending email notifications once:
+
+```typescript
+import { processPendingEmails } from './workers/emailWorker';
+
+// Process up to 10 pending emails
+const stats = await processPendingEmails(10);
+console.log(stats); // { processed: 10, successful: 9, failed: 1 }
+```
+
+#### Continuous Mode
+Run the email worker continuously with automatic polling:
+
+```typescript
+import { startEmailWorker } from './workers/emailWorker';
+
+// Process 10 emails every 60 seconds
+await startEmailWorker(10, 60000);
+```
+
+#### Run from Command Line
+```bash
+# Process emails once
+npx ts-node workers/emailWorker.ts
+
+# Or use the compiled version
+node dist/workers/emailWorker.js
+```
+
+### Email Service API
+
+The `EmailService` class provides the following methods:
+
+- `fetchPendingEmails(limit)` - Fetch pending email notifications from Supabase
+- `sendEmail(to, subject, html)` - Send an email via Resend API
+- `updateStatus(eventId, status, errorMessage?)` - Update notification status
+- `handleRetry(fn, maxRetries, baseDelayMs)` - Execute function with exponential backoff
+- `processEmailNotification(event)` - Process a single notification end-to-end
+
+### Configuration
+
+Add these environment variables to your `.env` file:
+
+```env
+RESEND_API_KEY=re_your_api_key_here
+FROM_EMAIL=noreply@yourdomain.com
+```
+
+Get your Resend API key from [resend.com](https://resend.com).
 
 ## Development
 
