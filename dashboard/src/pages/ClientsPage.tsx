@@ -10,12 +10,13 @@
  *   - Send test email
  *   - View logs per client
  */
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
+import { NewClientModal } from '../components/ui/NewClientModal';
 import { usePolling } from '../hooks/usePolling';
 import { fetchClients, fetchNotifications } from '../api/client';
 import type { Client, NotificationEvent } from '../types';
@@ -32,6 +33,8 @@ function lastNotifStatus(notifications: NotificationEvent[], clientId: string): 
 }
 
 export function ClientsPage() {
+  const [showModal, setShowModal] = useState(false);
+
   const fetchAll = useCallback(async () => {
     const [clients, notifications] = await Promise.all([
       fetchClients(),
@@ -57,7 +60,7 @@ export function ClientsPage() {
           <EmptyState
             icon="👤"
             title="No clients yet"
-            description="Create your first client via the API or CLI."
+            description="Use the button below to add your first client."
           />
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -145,13 +148,23 @@ export function ClientsPage() {
             </table>
           </div>
         )}
-        {/* Refresh button */}
-        <div className="mt-4 flex justify-end">
+        {/* Action bar */}
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <Button variant="primary" size="sm" onClick={() => setShowModal(true)}>
+            + New Client
+          </Button>
           <Button variant="secondary" size="sm" onClick={refresh} loading={loading}>
             Refresh
           </Button>
         </div>
       </Card>
+
+      {showModal && (
+        <NewClientModal
+          onClose={() => setShowModal(false)}
+          onCreated={() => { setShowModal(false); refresh(); }}
+        />
+      )}
     </div>
   );
 }

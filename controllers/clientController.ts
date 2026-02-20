@@ -12,7 +12,7 @@ export class ClientController {
    */
   async createClient(req: Request, res: Response): Promise<Response> {
     try {
-      const { name, email, company } = req.body;
+      const { name, email, company, phone, workflow_settings } = req.body;
 
       // Validate name
       if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -22,7 +22,7 @@ export class ClientController {
         });
       }
 
-      const client = await clientService.createClient(name, email, company);
+      const client = await clientService.createClient(name, email, company, phone, workflow_settings);
 
       console.log(`Client created: ${client.id}`);
 
