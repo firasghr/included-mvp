@@ -1,30 +1,22 @@
 import { Router, Request, Response } from 'express';
-// We import the singleton service correctly rather than redeclaring it
 import inboundEmailService from '../services/inboundEmailService';
 
-// --- Express route ---
 const router = Router();
 
 router.post('/', async (req: Request, res: Response): Promise<any> => {
   try {
     console.log('🧠 Resend inbound webhook payload:', JSON.stringify(req.body, null, 2));
 
-    const { data } = req.body;
-    if (!data) return res.status(400).json({ error: 'Invalid payload', message: 'Missing data object' });
+    const { from, to, subject, text, html } = req.body;
 
-    const from = data.from;
-    const toArray = data.to;
-    const subject = data.subject;
-    const text = data.text || '';
-    const html = data.html || '';
+    // Validate required fields and include the field name in the error message
+    if (!from) return res.status(400).json({ error: 'Invalid payload', message: 'Missing required field: from' });
+    if (!to) return res.status(400).json({ error: 'Invalid payload', message: 'Missing required field: to' });
+    if (!subject) return res.status(400).json({ error: 'Invalid payload', message: 'Missing required field: subject' });
+    if (!text) return res.status(400).json({ error: 'Invalid payload', message: 'Missing required field: text' });
 
-    if (!from || !toArray || !Array.isArray(toArray) || toArray.length === 0 || !subject) {
-      return res.status(400).json({ error: 'Invalid payload', message: 'Missing required fields' });
-    }
-
-    const to = toArray[0]; // first recipient
-
-    // Use the correctly imported service instance
+    // Service errors (invalid address, client not found, DB failure) propagate as 500 so
+    // callers can detect and retry. Structural validation (missing fields) is handled above with 400.
     await inboundEmailService.processInboundEmail({ from, to, subject, text, html });
 
     return res.status(200).json({ success: true });

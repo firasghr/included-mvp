@@ -5,7 +5,12 @@ import { Email } from '../types/task';
 
 export interface InboundEmailPayload {
   from: string;
-  to: string | string[]; // can be array now
+  /**
+   * The single recipient address in the format `client_<uuid>@<domain>`.
+   * The route layer is responsible for extracting a single address from
+   * multi-recipient payloads before calling the service.
+   */
+  to: string;
   subject: string;
   text: string;
   html?: string;
@@ -24,66 +29,61 @@ export class InboundEmailService {
   }
 
   /**
-   * Process an inbound email payload from Resend.
+   * Process a single inbound email payload from Resend.
+   * Throws on validation errors (unknown address, missing client, DB failure).
+   *
+   * @param payload - Inbound email fields extracted from the Resend webhook
+   * @returns The persisted Email record
    */
-  async processInboundEmail(payload: InboundEmailPayload): Promise<Email[]> {
+  async processInboundEmail(payload: InboundEmailPayload): Promise<Email> {
     console.log('Processing inbound email payload:', payload);
 
-    const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
-    const emails: Email[] = [];
-
-    for (const to of recipients) {
-      // 1. Extract client ID
-      const clientId = this.extractClientId(to);
-      if (!clientId) {
-        console.warn(`Could not extract client ID from address: ${to}`);
-        continue;
-      }
-
-      // 2. Validate client exists
-      const client = await clientService.getClientById(clientId);
-      if (!client) {
-        console.warn(`Client not found: ${clientId}`);
-        continue;
-      }
-
-      // 3. Insert email into Supabase
-      const { data: email, error } = await supabase
-        .from('emails')
-        .insert([
-          {
-            client_id: clientId,
-            sender: payload.from,
-            subject: payload.subject,
-            body: payload.text,
-            status: 'pending',
-            source: 'inbound',
-          },
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        console.error(`Failed to create email for client ${clientId}:`, error.message);
-        continue;
-      }
-
-      console.log(`Inbound email record created: ${email.id}`);
-      emails.push(email);
-
-      // 4. Trigger task pipeline (non-blocking)
-      const taskInput = `Email from: ${payload.from}\nSubject: ${payload.subject}\n\n${payload.text}`;
-      taskService.createTask(taskInput, clientId).catch((err) => {
-        console.error(`Failed to trigger pipeline for inbound email ${email.id}:`, err);
-      });
+    // 1. Extract client ID
+    const clientId = this.extractClientId(payload.to);
+    if (!clientId) {
+      throw new Error(`Could not extract client ID from address: ${payload.to}`);
     }
 
-    return emails;
+    // 2. Validate client exists
+    const client = await clientService.getClientById(clientId);
+    if (!client) {
+      throw new Error(`Client not found: ${clientId}`);
+    }
+
+    // 3. Insert email into Supabase
+    const { data: email, error } = await supabase
+      .from('emails')
+      .insert([
+        {
+          client_id: clientId,
+          sender: payload.from,
+          subject: payload.subject,
+          body: payload.text,
+          status: 'pending',
+          source: 'inbound',
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to create email for client ${clientId}: ${error.message}`);
+    }
+
+    console.log(`Inbound email record created: ${email.id}`);
+
+    // 4. Trigger task pipeline (non-blocking)
+    const taskInput = `Email from: ${payload.from}\nSubject: ${payload.subject}\n\n${payload.text}`;
+    taskService.createTask(taskInput, clientId).catch((err) => {
+      console.error(`Failed to trigger pipeline for inbound email ${email.id}:`, err);
+    });
+
+    return email;
   }
 }
 
 // helper export
-export const processInboundEmail = async (payload: InboundEmailPayload): Promise<Email[]> => {
+export const processInboundEmail = async (payload: InboundEmailPayload): Promise<Email> => {
   return new InboundEmailService().processInboundEmail(payload);
 };
 

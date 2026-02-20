@@ -20,18 +20,16 @@ const mockData: MockData = {
 };
 
 const createMockQueryBuilder = (table: keyof MockData) => {
-  let filters: Record<string, any> = {};
+  const filters: Record<string, any> = {};
   let orderConfig: { column: string; ascending: boolean } | null = null;
   let limitValue: number | null = null;
-  let selectFields = '*';
 
   let operation: 'select' | 'insert' | 'update' | 'delete' | null = null;
   let operationData: any = null;
 
   const queryBuilder = {
-    select: (fields = '*') => {
+    select: (_fields = '*') => {
       if (!operation) operation = 'select';
-      selectFields = fields;
       return queryBuilder;
     },
     insert: (data: any[]) => {
@@ -98,7 +96,7 @@ const createMockQueryBuilder = (table: keyof MockData) => {
           resultData = items;
         } else if (operation === 'update') {
           const updatedItems: any[] = [];
-          mockData[table].forEach((item, index) => {
+          mockData[table].forEach((item, _index) => {
             const matches = Object.entries(filters).every(
               ([key, value]) => item[key] === value
             );
@@ -175,9 +173,10 @@ export const clearMockData = () => {
 // Export function to get mock data for assertions
 export const getMockData = () => mockData;
 
-// Mock the supabase module
+// Mock the supabase module - export an instance (not the factory) so services
+// can call `.from(...)` directly on the default export.
 jest.mock('../../database/supabase', () => ({
   __esModule: true,
-  default: mockSupabase,
+  default: mockSupabase(),
   getSupabaseClient: mockSupabase,
 }));
