@@ -14,7 +14,6 @@ export class TaskController {
     try {
       const { text, clientId } = req.body;
 
-      // Validate text
       if (!text || typeof text !== 'string' || text.trim().length === 0) {
         return res.status(400).json({
           error: 'Invalid request',
@@ -22,7 +21,6 @@ export class TaskController {
         });
       }
 
-      // Validate clientId
       if (!clientId || typeof clientId !== 'string' || clientId.trim().length === 0) {
         return res.status(400).json({
           error: 'Invalid request',
@@ -40,11 +38,22 @@ export class TaskController {
     } catch (error) {
       console.error('Error creating task:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return res.status(500).json({ error: 'Internal server error', message: errorMessage });
+    }
+  }
 
-      return res.status(500).json({
-        error: 'Internal server error',
-        message: errorMessage,
-      });
+  /**
+   * GET /task
+   * Return recent tasks (for dashboard)
+   */
+  async getRecentTasks(req: Request, res: Response): Promise<Response> {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit ?? '50'), 10) || 50, 200);
+      const tasks = await taskService.getRecentTasks(limit);
+      return res.status(200).json({ success: true, tasks });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return res.status(500).json({ error: 'Internal server error', message: errorMessage });
     }
   }
 }

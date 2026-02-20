@@ -1,40 +1,59 @@
 /**
- * Logs page — shows system logs from the orchestrator and tasks.
+ * Logs page — shows recent tasks with their status and output (summary).
+ * Live data from GET /task and GET /summaries.
  *
- * Fully locked: live log streaming is not yet implemented.
- * Shows a visual placeholder to make the intent clear.
+ * Locked (future):
+ *   - Log filtering by date/client
+ *   - Export logs
+ *   - Live log stream from orchestrator
  */
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { Card } from '../components/ui/Card';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Spinner } from '../components/ui/Spinner';
+import { EmptyState } from '../components/ui/EmptyState';
 import { LockedFeature } from '../components/ui/LockedFeature';
+import { usePolling } from '../hooks/usePolling';
+import { fetchTasks, fetchClients } from '../api/client';
+import type { Task, Client } from '../types';
 
-const PLACEHOLDER_LOGS = [
-  { time: '06:12:44', level: 'INFO',  client: 'client-1', message: 'Task created: abc-123' },
-  { time: '06:12:45', level: 'INFO',  client: 'client-1', message: 'Processing task abc-123 with LLM…' },
-  { time: '06:12:47', level: 'INFO',  client: 'client-1', message: 'Summary created for task abc-123' },
-  { time: '06:12:47', level: 'INFO',  client: 'client-1', message: 'Notification event created (email)' },
-  { time: '06:12:48', level: 'WARN',  client: 'client-2', message: 'Retry 1/3 for notification def-456' },
-  { time: '06:12:52', level: 'ERROR', client: 'client-2', message: 'Failed to send email: SMTP timeout' },
-  { time: '06:13:00', level: 'INFO',  client: 'system',   message: 'Email worker: processed 3 notifications' },
-];
-
-const LEVEL_CLASSES: Record<string, string> = {
-  INFO:  'text-sky-400',
-  WARN:  'text-amber-400',
-  ERROR: 'text-rose-400',
+const STATUS_VARIANT: Record<Task['status'], 'green' | 'yellow' | 'red' | 'gray' | 'blue'> = {
+  completed: 'green',
+  processing: 'blue',
+  pending: 'yellow',
+  failed: 'red',
 };
 
 export function LogsPage() {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const fetchAll = useCallback(async () => {
+    const [tasks, clients] = await Promise.all([
+      fetchTasks(100),
+      fetchClients().catch(() => [] as Client[]),
+    ]);
+    const clientMap = new Map(clients.map(c => [c.id, c.name]));
+    return { tasks, clientMap };
+  }, []);
+
+  const { data, loading, error, refresh } = usePolling(fetchAll, 12000);
+
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* Search/filter bar — locked */}
-      <LockedFeature message="Log filtering — not implemented yet">
+      <LockedFeature message="Log filtering — coming soon">
         <Card>
           <div className="flex items-center gap-3">
             <input
               readOnly
-              placeholder="Search logs by date, client, or type…"
+              placeholder="Search logs by date, client, or status…"
               className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2 text-sm text-slate-500 dark:text-slate-400"
             />
             <Button variant="secondary" size="sm" disabled>Filter</Button>
@@ -43,46 +62,94 @@ export function LogsPage() {
         </Card>
       </LockedFeature>
 
-      {/* Live log stream — locked */}
-      <LockedFeature message="Live log stream — not implemented yet">
-        <Card title="Live Logs — Orchestrator">
-          <div className="font-mono text-xs bg-slate-950 text-slate-300 rounded-lg p-4 space-y-1 h-80 overflow-y-auto">
-            {PLACEHOLDER_LOGS.map((log, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <span className="text-slate-500 shrink-0">{log.time}</span>
-                <span className={`shrink-0 w-12 font-bold ${LEVEL_CLASSES[log.level] ?? ''}`}>{log.level}</span>
-                <span className="text-slate-400 shrink-0">[{log.client}]</span>
-                <span>{log.message}</span>
-              </div>
-            ))}
-            <div className="flex items-center gap-2 mt-2">
-              <span className="inline-block w-2 h-4 bg-slate-500 animate-pulse rounded-sm" />
-            </div>
+      {/* Task log table */}
+      <Card title={`Tasks${data ? ` (${data.tasks.length})` : ''}`}>
+        {loading && !data ? (
+          <div className="flex justify-center py-8"><Spinner /></div>
+        ) : !data?.tasks?.length ? (
+          <EmptyState
+            icon="📋"
+            title="No tasks yet"
+            description="Tasks appear here once emails or documents are processed."
+          />
+        ) : (
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 dark:border-slate-800">
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Task ID</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Client</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Status</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Input (preview)</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Output (summary)</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.tasks.map((task: Task) => {
+                  const isExpanded = expanded === task.id;
+                  const clientName = data.clientMap.get(task.client_id);
+                  return (
+                    <tr
+                      key={task.id}
+                      className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      onClick={() => setExpanded(isExpanded ? null : task.id)}
+                    >
+                      <td className="px-5 py-2.5 font-mono text-xs text-slate-400">{task.id.slice(0, 8)}…</td>
+                      <td className="px-5 py-2.5 text-slate-700 dark:text-slate-300 text-xs">
+                        {clientName ?? <span className="font-mono text-slate-400">{task.client_id.slice(0, 8)}…</span>}
+                      </td>
+                      <td className="px-5 py-2.5">
+                        <Badge variant={STATUS_VARIANT[task.status]}>{task.status}</Badge>
+                      </td>
+                      <td className="px-5 py-2.5 text-slate-500 dark:text-slate-400 max-w-xs">
+                        <span className="block truncate">
+                          {isExpanded ? task.input : task.input.slice(0, 60) + (task.input.length > 60 ? '…' : '')}
+                        </span>
+                      </td>
+                      <td className="px-5 py-2.5 text-slate-600 dark:text-slate-300 max-w-xs">
+                        {task.output ? (
+                          <span className="block truncate">
+                            {isExpanded ? task.output : task.output.slice(0, 80) + (task.output.length > 80 ? '…' : '')}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300 dark:text-slate-600 italic">—</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-2.5 text-xs text-slate-400">
+                        {task.created_at ? new Date(task.created_at).toLocaleString() : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div className="mt-3 flex items-center justify-between">
-            <Button variant="secondary" size="sm" locked lockMessage="Export logs — not implemented yet">
-              Export Logs
-            </Button>
-            <Button variant="secondary" size="sm" locked lockMessage="Live stream — not implemented yet">
-              ▶ Live Stream
-            </Button>
-          </div>
-        </Card>
-      </LockedFeature>
+        )}
+        <div className="mt-4 flex items-center justify-between">
+          <Button
+            variant="secondary"
+            size="sm"
+            locked
+            lockMessage="Export logs — coming soon"
+          >
+            Export CSV
+          </Button>
+          <Button variant="secondary" size="sm" onClick={refresh} loading={loading}>
+            Refresh
+          </Button>
+        </div>
+      </Card>
 
-      {/* Clawdbot alerts — locked */}
-      <LockedFeature message="Clawdbot alerts — not implemented yet">
-        <Card title="Clawdbot Alerts">
-          <div className="space-y-2">
-            {['High task failure rate detected', 'SMTP quota 80% used', 'LLM API latency elevated'].map((alert) => (
-              <div key={alert} className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800">
-                <span className="text-rose-500">⚠</span>
-                <span className="text-sm text-rose-700 dark:text-rose-300">{alert}</span>
-              </div>
-            ))}
+      {/* Live log stream placeholder — locked */}
+      <LockedFeature message="Live log stream — coming soon">
+        <Card title="Live Orchestrator Logs">
+          <div className="font-mono text-xs bg-slate-950 text-slate-300 rounded-lg p-4 h-40 flex items-center justify-center">
+            <span className="text-slate-500">Live streaming not yet enabled</span>
           </div>
         </Card>
       </LockedFeature>
     </div>
   );
 }
+

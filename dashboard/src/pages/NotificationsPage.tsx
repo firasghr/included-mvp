@@ -3,6 +3,7 @@
  *
  * Live data:
  *   - GET /notifications?status=xxx → filtered list
+ *   - GET /clients → for displaying client names
  *
  * Locked:
  *   - Retry per notification (needs POST /notifications/:id/retry)
@@ -16,8 +17,8 @@ import { Button } from '../components/ui/Button';
 import { Spinner } from '../components/ui/Spinner';
 import { EmptyState } from '../components/ui/EmptyState';
 import { usePolling } from '../hooks/usePolling';
-import { fetchNotifications } from '../api/client';
-import type { NotificationEvent } from '../types';
+import { fetchNotifications, fetchClients } from '../api/client';
+import type { NotificationEvent, Client } from '../types';
 
 type FilterStatus = 'all' | 'pending' | 'sent' | 'failed';
 
@@ -31,12 +32,19 @@ const FILTER_TABS: { label: string; value: FilterStatus }[] = [
 export function NotificationsPage() {
   const [filter, setFilter] = useState<FilterStatus>('all');
 
-  const fetchFn = useCallback(
-    () => fetchNotifications(filter !== 'all' ? { status: filter } : undefined),
-    [filter]
-  );
+  const fetchFn = useCallback(async () => {
+    const [notifications, clients] = await Promise.all([
+      fetchNotifications(filter !== 'all' ? { status: filter } : undefined),
+      fetchClients().catch(() => [] as Client[]),
+    ]);
+    const clientMap = new Map(clients.map(c => [c.id, c.name]));
+    return { notifications, clientMap };
+  }, [filter]);
 
-  const { data: notifications, loading, error, refresh } = usePolling(fetchFn, 12000);
+  const { data, loading, error, refresh } = usePolling(fetchFn, 12000);
+
+  const notifications = data?.notifications ?? null;
+  const clientMap = data?.clientMap ?? new Map<string, string>();
 
   return (
     <div className="space-y-6">
@@ -75,7 +83,7 @@ export function NotificationsPage() {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">ID</th>
-                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Client ID</th>
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Client</th>
                   <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Type</th>
                   <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Status</th>
                   <th className="text-left px-5 py-2.5 font-medium text-slate-500 dark:text-slate-400">Created</th>
@@ -90,7 +98,11 @@ export function NotificationsPage() {
                     className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
                   >
                     <td className="px-5 py-2.5 font-mono text-xs text-slate-400">{n.id.slice(0, 8)}…</td>
-                    <td className="px-5 py-2.5 font-mono text-xs text-slate-400">{n.client_id.slice(0, 8)}…</td>
+                    <td className="px-5 py-2.5 text-slate-700 dark:text-slate-300 text-xs">
+                      {clientMap.get(n.client_id) ?? (
+                        <span className="font-mono text-slate-400">{n.client_id.slice(0, 8)}…</span>
+                      )}
+                    </td>
                     <td className="px-5 py-2.5">
                       <Badge variant={n.type === 'email' ? 'blue' : 'gray'}>{n.type}</Badge>
                     </td>
@@ -116,7 +128,7 @@ export function NotificationsPage() {
                         size="sm"
                         variant="ghost"
                         locked
-                        lockMessage="Retry — not implemented yet"
+                        lockMessage="Retry — coming soon"
                       >
                         Retry
                       </Button>
@@ -132,7 +144,7 @@ export function NotificationsPage() {
             variant="secondary"
             size="sm"
             locked
-            lockMessage="Export — not implemented yet"
+            lockMessage="Export — coming soon"
           >
             Export CSV
           </Button>
@@ -141,7 +153,7 @@ export function NotificationsPage() {
               variant="danger"
               size="sm"
               locked
-              lockMessage="Bulk retry — not implemented yet"
+              lockMessage="Bulk retry — coming soon"
             >
               Retry All Failed
             </Button>
@@ -154,3 +166,4 @@ export function NotificationsPage() {
     </div>
   );
 }
+

@@ -40,6 +40,23 @@ export class SummaryService {
   }
 
   /**
+   * Get recent summaries (for dashboard)
+   */
+  async getRecentSummaries(limit: number = 50): Promise<Summary[]> {
+    const { data: summaries, error } = await supabase
+      .from('summaries')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to fetch summaries: ${error.message}`);
+    }
+
+    return summaries || [];
+  }
+
+  /**
    * Get summaries for a specific client
    */
   async getSummariesByClient(clientId: string): Promise<Summary[]> {

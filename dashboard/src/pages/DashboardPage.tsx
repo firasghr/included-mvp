@@ -6,7 +6,7 @@
  *   - GET /clients          → total clients
  *   - GET /notifications    → pending / failed / sent counts
  *
- * Locked (not yet implemented):
+ * Locked (future):
  *   - Historical trend charts (emails/summaries over time)
  *   - System health per Mac
  */
@@ -27,7 +27,7 @@ import { LockedFeature } from '../components/ui/LockedFeature';
 import { Spinner } from '../components/ui/Spinner';
 import { usePolling } from '../hooks/usePolling';
 import { fetchHealth, fetchClients, fetchNotifications } from '../api/client';
-import type { NotificationEvent } from '../types';
+import type { NotificationEvent, Client } from '../types';
 
 // Placeholder data for the locked trend chart
 const PLACEHOLDER_TREND = [
@@ -51,10 +51,11 @@ export function DashboardPage() {
   const fetchAll = useCallback(async () => {
     const [health, clients, notifications] = await Promise.all([
       fetchHealth().catch(() => null),
-      fetchClients().catch(() => []),
-      fetchNotifications().catch(() => []),
+      fetchClients().catch(() => [] as Client[]),
+      fetchNotifications().catch(() => [] as NotificationEvent[]),
     ]);
-    return { health, clients, notifications };
+    const clientMap = new Map(clients.map(c => [c.id, c.name]));
+    return { health, clients, notifications, clientMap };
   }, []);
 
   const { data, loading, error } = usePolling(fetchAll, 12000);
@@ -126,7 +127,7 @@ export function DashboardPage() {
       </div>
 
       {/* System health per Mac — LOCKED */}
-      <LockedFeature message="Multi-Mac monitoring — not implemented yet">
+      <LockedFeature message="Multi-Mac monitoring — coming soon">
         <Card title="System Health — All Macs">
           <div className="space-y-2">
             {['Mac-1 (Orchestrator)', 'Mac-2', 'Mac-3'].map((mac) => (
@@ -140,7 +141,7 @@ export function DashboardPage() {
       </LockedFeature>
 
       {/* Historical trend chart — LOCKED */}
-      <LockedFeature message="Historical trends — not implemented yet">
+      <LockedFeature message="Historical trends — coming soon">
         <Card title="Emails Processed (Last 7 Days)">
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={PLACEHOLDER_TREND}>
@@ -165,6 +166,7 @@ export function DashboardPage() {
               <thead>
                 <tr className="border-b border-slate-100 dark:border-slate-800">
                   <th className="text-left px-5 py-2 font-medium text-slate-500 dark:text-slate-400">ID</th>
+                  <th className="text-left px-5 py-2 font-medium text-slate-500 dark:text-slate-400">Client</th>
                   <th className="text-left px-5 py-2 font-medium text-slate-500 dark:text-slate-400">Type</th>
                   <th className="text-left px-5 py-2 font-medium text-slate-500 dark:text-slate-400">Status</th>
                   <th className="text-left px-5 py-2 font-medium text-slate-500 dark:text-slate-400">Created</th>
@@ -174,6 +176,11 @@ export function DashboardPage() {
                 {data.notifications.slice(0, 8).map((n) => (
                   <tr key={n.id} className="border-b border-slate-50 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                     <td className="px-5 py-2.5 font-mono text-xs text-slate-400">{n.id.slice(0, 8)}…</td>
+                    <td className="px-5 py-2.5 text-xs text-slate-700 dark:text-slate-300">
+                      {data.clientMap.get(n.client_id) ?? (
+                        <span className="font-mono text-slate-400">{n.client_id.slice(0, 8)}…</span>
+                      )}
+                    </td>
                     <td className="px-5 py-2.5">
                       <Badge variant={n.type === 'email' ? 'blue' : 'gray'}>{n.type}</Badge>
                     </td>
@@ -201,3 +208,4 @@ export function DashboardPage() {
     </div>
   );
 }
+

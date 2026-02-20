@@ -113,7 +113,7 @@ export function NewClientModal({ onClose, onCreated }: NewClientModalProps) {
               )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Share the forwarding email with this client so they can forward emails to be summarised by the AI assistant.
+              Share the forwarding email with this client so they can forward emails to be summarized by the AI assistant.
             </p>
             <div className="flex justify-end pt-1">
               <Button variant="primary" onClick={onClose}>Done</Button>

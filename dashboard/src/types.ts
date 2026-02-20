@@ -30,6 +30,24 @@ export interface NotificationEvent {
   client_name?: string;
 }
 
+export interface Task {
+  id: string;
+  input: string;
+  output: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  client_id: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Summary {
+  id: string;
+  task_id: string;
+  client_id: string;
+  summary: string;
+  created_at?: string;
+}
+
 export interface SystemHealth {
   status: 'ok' | 'error';
   timestamp: string;

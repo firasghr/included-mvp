@@ -123,6 +123,23 @@ export class TaskService {
   }
 
   /**
+   * Get recent tasks (for dashboard logs view)
+   */
+  async getRecentTasks(limit: number = 50): Promise<Task[]> {
+    const { data: tasks, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to fetch tasks: ${error.message}`);
+    }
+
+    return tasks || [];
+  }
+
+  /**
    * Update task status
    */
   async updateTaskStatus(taskId: string, status: string, output?: string): Promise<void> {

@@ -12,7 +12,7 @@ export class EmailService {
 
   constructor() {
     this.apiKey = process.env.RESEND_API_KEY || process.env.EMAIL_PROVIDER_API_KEY || '';
-    this.fromEmail = process.env.FROM_EMAIL || 'x@snapaas.com';
+    this.fromEmail = process.env.FROM_EMAIL || 'noreply@yourdomain.com';
 
     if (!this.apiKey) {
       throw new Error('RESEND_API_KEY (or EMAIL_PROVIDER_API_KEY) environment variable is not set');
