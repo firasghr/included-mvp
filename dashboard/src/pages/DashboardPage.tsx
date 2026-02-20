@@ -5,6 +5,8 @@
  *   - GET /health           → system status
  *   - GET /clients          → total clients
  *   - GET /notifications    → pending / failed / sent counts
+ *   - GET /task             → total tasks processed
+ *   - GET /summaries        → total summaries generated
  *
  * Locked (future):
  *   - Historical trend charts (emails/summaries over time)
@@ -26,7 +28,7 @@ import { Badge } from '../components/ui/Badge';
 import { LockedFeature } from '../components/ui/LockedFeature';
 import { Spinner } from '../components/ui/Spinner';
 import { usePolling } from '../hooks/usePolling';
-import { fetchHealth, fetchClients, fetchNotifications } from '../api/client';
+import { fetchHealth, fetchClients, fetchNotifications, fetchTasks, fetchSummaries } from '../api/client';
 import type { NotificationEvent, Client } from '../types';
 
 // Placeholder data for the locked trend chart
@@ -49,13 +51,16 @@ function notifCounts(notifications: NotificationEvent[]) {
 
 export function DashboardPage() {
   const fetchAll = useCallback(async () => {
-    const [health, clients, notifications] = await Promise.all([
+    const [health, clients, notifications, tasks, summaries] = await Promise.all([
       fetchHealth().catch(() => null),
       fetchClients().catch(() => [] as Client[]),
       fetchNotifications().catch(() => [] as NotificationEvent[]),
+      fetchTasks(500).catch(() => []),
+      fetchSummaries({ limit: 500 }).catch(() => []),
     ]);
     const clientMap = new Map(clients.map(c => [c.id, c.name]));
-    return { health, clients, notifications, clientMap };
+    const completedTasks = tasks.filter(t => t.status === 'completed').length;
+    return { health, clients, notifications, tasks, summaries, clientMap, completedTasks };
   }, []);
 
   const { data, loading, error } = usePolling(fetchAll, 12000);
@@ -78,7 +83,7 @@ export function DashboardPage() {
       )}
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         <StatCard
           label="System Status"
           value={loading ? '…' : systemOnline ? 'Online' : 'Offline'}
@@ -98,6 +103,31 @@ export function DashboardPage() {
               <circle cx="9" cy="7" r="4" />
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Tasks Processed"
+          value={loading ? '…' : data?.completedTasks ?? 0}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="9 11 12 14 22 4" />
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+          }
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <StatCard
+          label="Summaries Generated"
+          value={loading ? '…' : data?.summaries?.length ?? 0}
+          icon={
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
           }
         />

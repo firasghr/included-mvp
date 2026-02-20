@@ -34,6 +34,7 @@ function lastNotifStatus(notifications: NotificationEvent[], clientId: string): 
 
 export function ClientsPage() {
   const [showModal, setShowModal] = useState(false);
+  const [search, setSearch] = useState('');
 
   const fetchAll = useCallback(async () => {
     const [clients, notifications] = await Promise.all([
@@ -45,6 +46,16 @@ export function ClientsPage() {
 
   const { data, loading, error, refresh } = usePolling(fetchAll, 12000);
 
+  const filteredClients = (data?.clients ?? []).filter((c) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      (c.email ?? '').toLowerCase().includes(q) ||
+      (c.company ?? '').toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-6">
       {error && (
@@ -53,14 +64,24 @@ export function ClientsPage() {
         </div>
       )}
 
-      <Card title={`Clients (${data?.clients?.length ?? 0})`}>
+      <Card title={`Clients (${filteredClients.length}${data?.clients && filteredClients.length !== data.clients.length ? ` of ${data.clients.length}` : ''})`}>
+        {/* Search bar */}
+        <div className="mb-4">
+          <input
+            type="text"
+            placeholder="Search by name, email, or company…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full sm:w-80 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          />
+        </div>
         {loading && !data ? (
           <div className="flex justify-center py-8"><Spinner /></div>
-        ) : !data?.clients?.length ? (
+        ) : !filteredClients.length ? (
           <EmptyState
             icon="👤"
-            title="No clients yet"
-            description="Use the button below to add your first client."
+            title={search ? 'No clients match your search' : 'No clients yet'}
+            description={search ? 'Try a different search term.' : 'Use the button below to add your first client.'}
           />
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -76,8 +97,8 @@ export function ClientsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.clients.map((client: Client) => {
-                  const status = lastNotifStatus(data.notifications ?? [], client.id);
+              {filteredClients.map((client: Client) => {
+                  const status = lastNotifStatus(data?.notifications ?? [], client.id);
                   return (
                     <tr
                       key={client.id}
