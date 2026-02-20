@@ -15,14 +15,14 @@ export class ClientService {
     const inboundEmailDomain = process.env.INBOUND_EMAIL_DOMAIN || 'included.yourdomain.com';
     const inboundEmail = `client_${clientId}@${inboundEmailDomain}`;
 
-    const { data: client, error } = await supabase()
+    const { data: client, error } = await supabase
       .from('clients')
       .insert([
         {
           id: clientId,
           name: name.trim(),
-          email: email && typeof email === 'string' ? email.trim() : null,
-          company: company && typeof company === 'string' ? company.trim() : null,
+          email: email?.trim() || null,
+          company: company?.trim() || null,
           inbound_email: inboundEmail,
         },
       ])
@@ -40,7 +40,7 @@ export class ClientService {
    * Get all clients
    */
   async getAllClients(): Promise<Client[]> {
-    const { data: clients, error } = await supabase()
+    const { data: clients, error } = await supabase
       .from('clients')
       .select('*')
       .order('created_at', { ascending: false });
@@ -56,7 +56,7 @@ export class ClientService {
    * Get a single client by ID
    */
   async getClientById(id: string): Promise<Client | null> {
-    const { data: client, error } = await supabase()
+    const { data: client, error } = await supabase
       .from('clients')
       .select('*')
       .eq('id', id)

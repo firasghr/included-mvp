@@ -41,13 +41,13 @@ if (require.main === module) {
     console.log(`Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
-    
+
     // Start email worker in background (non-blocking)
     // Import lazily to avoid loading emailService during tests
     console.log('Starting email worker...');
     const BATCH_SIZE = 10; // Number of emails to process per batch
     const INTERVAL_MS = 10000; // Poll every 10 seconds (10000ms)
-    
+
     import('../workers/emailWorker')
       .then(({ startEmailWorker }) => {
         return startEmailWorker(BATCH_SIZE, INTERVAL_MS);

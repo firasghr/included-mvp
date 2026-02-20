@@ -12,7 +12,7 @@ export class SummaryService {
    * Also creates notification events for the client
    */
   async createSummary(taskId: string, clientId: string, summary: string): Promise<Summary> {
-    const { data: summaryRecord, error } = await supabase()
+    const { data: summaryRecord, error } = await supabase
       .from('summaries')
       .insert([
         {
@@ -43,7 +43,7 @@ export class SummaryService {
    * Get summaries for a specific client
    */
   async getSummariesByClient(clientId: string): Promise<Summary[]> {
-    const { data: summaries, error } = await supabase()
+    const { data: summaries, error } = await supabase
       .from('summaries')
       .select('*')
       .eq('client_id', clientId)

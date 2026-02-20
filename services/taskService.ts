@@ -15,7 +15,7 @@ export class TaskService {
   async createTask(text: string, clientId: string): Promise<Task> {
     const taskId = uuidv4();
 
-    const { data: task, error } = await supabase()
+    const { data: task, error } = await supabase
       .from('tasks')
       .insert([
         {
@@ -51,7 +51,7 @@ export class TaskService {
   private async processTaskAsync(taskId: string, inputText: string, clientId: string): Promise<void> {
     try {
       // Update task status to processing
-      await supabase()
+      await supabase
         .from('tasks')
         .update({ status: 'processing' })
         .eq('id', taskId);
@@ -63,7 +63,7 @@ export class TaskService {
 
       // Check if there was an error
       if (summary === 'Error processing input.') {
-        await supabase()
+        await supabase
           .from('tasks')
           .update({
             output: summary,
@@ -76,7 +76,7 @@ export class TaskService {
         await summaryService.createSummary(taskId, clientId, summary);
 
         // Update task status to completed
-        await supabase()
+        await supabase
           .from('tasks')
           .update({
             output: summary,
@@ -91,7 +91,7 @@ export class TaskService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
 
       try {
-        await supabase()
+        await supabase
           .from('tasks')
           .update({
             output: `Error: ${errorMessage}`,
@@ -108,7 +108,7 @@ export class TaskService {
    * Get pending tasks for background processing
    */
   async getPendingTasks(limit: number = 10): Promise<Array<{ id: string; input: string; client_id: string }>> {
-    const { data: tasks, error } = await supabase()
+    const { data: tasks, error } = await supabase
       .from('tasks')
       .select('id, input, client_id')
       .eq('status', 'pending')
@@ -131,7 +131,7 @@ export class TaskService {
       updateData.output = output;
     }
 
-    const { error } = await supabase()
+    const { error } = await supabase
       .from('tasks')
       .update(updateData)
       .eq('id', taskId);

@@ -27,7 +27,7 @@ export class NotificationService {
       },
     ];
 
-    const { data: notificationEvents, error } = await supabase()
+    const { data: notificationEvents, error } = await supabase
       .from('notification_events')
       .insert(events)
       .select();
@@ -45,7 +45,7 @@ export class NotificationService {
    * Get pending notification events
    */
   async getPendingNotifications(limit: number = 50): Promise<NotificationEvent[]> {
-    const { data: events, error } = await supabase()
+    const { data: events, error } = await supabase
       .from('notification_events')
       .select('*')
       .eq('status', 'pending')
@@ -63,7 +63,7 @@ export class NotificationService {
    * Update notification event status
    */
   async updateNotificationStatus(eventId: string, status: 'sent' | 'failed'): Promise<void> {
-    const { error } = await supabase()
+    const { error } = await supabase
       .from('notification_events')
       .update({
         status,

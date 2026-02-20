@@ -1,24 +1,22 @@
-import { Resend } from 'resend';
+import axios from 'axios';
 import supabase from '../database/supabase';
 import { NotificationEvent } from '../types/task';
 
 /**
  * Email Service
- * Handles robust email sending using Resend API with retry logic
+ * Handles robust email sending using Resend API with retry logic via Axios
  */
 export class EmailService {
-  private resend: Resend;
+  private apiKey: string;
   private fromEmail: string;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY || process.env.EMAIL_PROVIDER_API_KEY;
+    this.apiKey = process.env.RESEND_API_KEY || process.env.EMAIL_PROVIDER_API_KEY || '';
     this.fromEmail = process.env.FROM_EMAIL || 'x@snapaas.com';
 
-    if (!apiKey) {
+    if (!this.apiKey) {
       throw new Error('RESEND_API_KEY (or EMAIL_PROVIDER_API_KEY) environment variable is not set');
     }
-
-    this.resend = new Resend(apiKey);
   }
 
   /**
@@ -32,7 +30,7 @@ export class EmailService {
     try {
       console.log(`Fetching up to ${limit} pending email notifications...`);
 
-      const { data: events, error } = await supabase()
+      const { data: events, error } = await supabase
         .from('notification_events')
         .select('*')
         .eq('type', 'email')
@@ -53,7 +51,7 @@ export class EmailService {
   }
 
   /**
-   * Send an email using Resend API
+   * Send an email using Resend API via Axios
    * 
    * @param to - Recipient email address
    * @param subject - Email subject line
@@ -64,24 +62,29 @@ export class EmailService {
     try {
       console.log(`Sending email to ${to} with subject: "${subject}"`);
 
-      // Cast response to any to avoid TypeScript errors with unknown type
-      const response = await this.resend.emails.send({
-        from: this.fromEmail,
-        to,
-        subject,
-        html,
-      }) as any;
-
-      if (response.error) {
-        throw new Error(`Resend API Error: ${response.error.message || JSON.stringify(response.error)}`);
-      }
+      const response = await axios.post(
+        'https://api.resend.com/emails',
+        {
+          from: this.fromEmail,
+          to: [to],
+          subject,
+          html,
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
       const id = response.data?.id || 'unknown';
       console.log(`Email sent successfully to ${to}. Message ID: ${id}`);
       return { id };
-    } catch (error) {
-      console.error(`Failed to send email to ${to}:`, error);
-      throw error;
+    } catch (error: any) {
+      const apiError = error.response?.data?.message || error.message;
+      console.error(`Failed to send email to ${to} via Axios:`, apiError);
+      throw new Error(`Resend Axios Error: ${apiError}`);
     }
   }
 
@@ -113,7 +116,7 @@ export class EmailService {
         console.error(`Error for notification ${eventId}: ${errorMessage}`);
       }
 
-      const { error } = await supabase()
+      const { error } = await supabase
         .from('notification_events')
         .update(updateData)
         .eq('id', eventId);
@@ -178,7 +181,7 @@ export class EmailService {
   async getClientEmailForSummary(summaryId: string): Promise<string | null> {
     try {
       // First get the summary to find the client_id
-      const { data: summary, error: summaryError } = await supabase()
+      const { data: summary, error: summaryError } = await supabase
         .from('summaries')
         .select('client_id, summary')
         .eq('id', summaryId)
@@ -190,7 +193,7 @@ export class EmailService {
       }
 
       // Then get the client's email
-      const { data: client, error: clientError } = await supabase()
+      const { data: client, error: clientError } = await supabase
         .from('clients')
         .select('email, name')
         .eq('id', summary.client_id)
@@ -216,7 +219,7 @@ export class EmailService {
    */
   async getSummaryContent(summaryId: string): Promise<{ summary: string; clientName: string } | null> {
     try {
-      const { data: summary, error: summaryError } = await supabase()
+      const { data: summary, error: summaryError } = await supabase
         .from('summaries')
         .select('client_id, summary')
         .eq('id', summaryId)
@@ -228,7 +231,7 @@ export class EmailService {
       }
 
       // Get client name
-      const { data: client, error: clientError } = await supabase()
+      const { data: client, error: clientError } = await supabase
         .from('clients')
         .select('name')
         .eq('id', summary.client_id)
