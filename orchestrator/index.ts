@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import dotenv from 'dotenv';
 import { requestLogger, errorHandler, notFoundHandler } from '../lib/middleware';
 import clientRoutes from '../routes/clientRoutes';
@@ -6,6 +7,7 @@ import taskRoutes from '../routes/taskRoutes';
 import reportRoutes from '../routes/reportRoutes';
 import emailWebhookRoutes from '../routes/emailWebhook';
 import inboundEmailRoutes from '../routes/inboundEmailRoutes';
+import notificationRoutes from '../routes/notificationRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -17,6 +19,13 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Allow the dashboard to call this API.
+// In development, defaults to the Vite dev-server origin (localhost:5173).
+// In production, set DASHBOARD_ORIGIN to your actual dashboard URL.
+// Credentials (cookies/auth headers) are intentionally not forwarded by the
+// dashboard, so `credentials: false` is safe here; we set it explicitly.
+const allowedOrigin = process.env.DASHBOARD_ORIGIN || 'http://localhost:5173';
+app.use(cors({ origin: allowedOrigin, credentials: false }));
 app.use(requestLogger);
 
 // Health check endpoint
@@ -30,6 +39,7 @@ app.use('/task', taskRoutes);
 app.use('/report', reportRoutes);
 app.use('/email-webhook', emailWebhookRoutes);
 app.use('/webhooks/resend-inbound', inboundEmailRoutes);
+app.use('/notifications', notificationRoutes);
 
 // Error handling
 app.use(notFoundHandler);

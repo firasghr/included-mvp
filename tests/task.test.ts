@@ -319,17 +319,17 @@ describe('Task Endpoint', () => {
       setOpenAIMockResponse('Summary for multiple tasks.');
 
       // Create multiple tasks
-      const task1 = await request(app)
+      const _task1 = await request(app)
         .post('/task')
         .send({ text: 'Task 1', clientId: testClientId })
         .expect(201);
 
-      const task2 = await request(app)
+      const _task2 = await request(app)
         .post('/task')
         .send({ text: 'Task 2', clientId: testClientId })
         .expect(201);
 
-      const task3 = await request(app)
+      const _task3 = await request(app)
         .post('/task')
         .send({ text: 'Task 3', clientId: testClientId })
         .expect(201);
