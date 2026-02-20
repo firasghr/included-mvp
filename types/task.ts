@@ -7,11 +7,19 @@ export interface Task {
   created_at?: string;
 }
 
+export interface WorkflowSettings {
+  reportFrequency: 'daily' | 'weekly' | 'none';
+  emailNotifications: boolean;
+  whatsappNotifications: boolean;
+}
+
 export interface Client {
   id: string;
   name: string;
   email?: string;
   company?: string;
+  phone?: string;
+  workflow_settings?: WorkflowSettings;
   inbound_email?: string;
   created_at?: string;
   updated_at?: string;

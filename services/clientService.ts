@@ -10,7 +10,7 @@ export class ClientService {
   /**
    * Create a new client
    */
-  async createClient(name: string, email?: string, company?: string): Promise<Client> {
+  async createClient(name: string, email?: string, company?: string, phone?: string, workflowSettings?: object): Promise<Client> {
     const clientId = uuidv4();
     const inboundEmailDomain = process.env.INBOUND_EMAIL_DOMAIN || 'included.yourdomain.com';
     const inboundEmail = `client_${clientId}@${inboundEmailDomain}`;
@@ -23,6 +23,8 @@ export class ClientService {
           name: name.trim(),
           email: email?.trim() || null,
           company: company?.trim() || null,
+          phone: phone?.trim() || null,
+          workflow_settings: workflowSettings || null,
           inbound_email: inboundEmail,
         },
       ])

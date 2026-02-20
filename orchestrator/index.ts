@@ -5,6 +5,7 @@ import { requestLogger, errorHandler, notFoundHandler } from '../lib/middleware'
 import clientRoutes from '../routes/clientRoutes';
 import taskRoutes from '../routes/taskRoutes';
 import reportRoutes from '../routes/reportRoutes';
+import summaryRoutes from '../routes/summaryRoutes';
 import emailWebhookRoutes from '../routes/emailWebhook';
 import inboundEmailRoutes from '../routes/inboundEmailRoutes';
 import notificationRoutes from '../routes/notificationRoutes';
@@ -22,8 +23,6 @@ app.use(express.urlencoded({ extended: true }));
 // Allow the dashboard to call this API.
 // In development, defaults to the Vite dev-server origin (localhost:5173).
 // In production, set DASHBOARD_ORIGIN to your actual dashboard URL.
-// Credentials (cookies/auth headers) are intentionally not forwarded by the
-// dashboard, so `credentials: false` is safe here; we set it explicitly.
 const allowedOrigin = process.env.DASHBOARD_ORIGIN || 'http://localhost:5173';
 app.use(cors({ origin: allowedOrigin, credentials: false }));
 app.use(requestLogger);
@@ -37,6 +36,7 @@ app.get('/health', (_req: Request, res: Response) => {
 app.use('/clients', clientRoutes);
 app.use('/task', taskRoutes);
 app.use('/report', reportRoutes);
+app.use('/summaries', summaryRoutes);
 app.use('/email-webhook', emailWebhookRoutes);
 app.use('/webhooks/resend-inbound', inboundEmailRoutes);
 app.use('/notifications', notificationRoutes);
@@ -52,19 +52,25 @@ if (require.main === module) {
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
 
-    // Start email worker in background (non-blocking)
-    // Import lazily to avoid loading emailService during tests
-    console.log('Starting email worker...');
-    const BATCH_SIZE = 10; // Number of emails to process per batch
-    const INTERVAL_MS = 10000; // Poll every 10 seconds (10000ms)
+    // Start email worker: sends pending email notifications on a polling loop
+    const EMAIL_BATCH_SIZE = 10;
+    const EMAIL_INTERVAL_MS = 10000;
 
     import('../workers/emailWorker')
-      .then(({ startEmailWorker }) => {
-        return startEmailWorker(BATCH_SIZE, INTERVAL_MS);
+      .then(({ startEmailWorker }) => startEmailWorker(EMAIL_BATCH_SIZE, EMAIL_INTERVAL_MS))
+      .catch(error => console.error('Email worker error:', error));
+
+    // Start automation worker: recovers tasks stuck in pending state
+    const AUTOMATION_INTERVAL_MS = 60000; // every 60 seconds
+
+    import('../workers/automationWorker')
+      .then(({ processPendingTasks }) => {
+        const run = () =>
+          processPendingTasks().catch(err => console.error('Automation worker error:', err));
+        run();
+        setInterval(run, AUTOMATION_INTERVAL_MS);
       })
-      .catch(error => {
-        console.error('Email worker error:', error);
-      });
+      .catch(error => console.error('Automation worker load error:', error));
   });
 }
 

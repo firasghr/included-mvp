@@ -1,552 +1,553 @@
-# Included MVP
+# Included — AI Assistant for SMBs
 
-Private AI assistant for SMBs to automate emails, documents, CRM updates, and reporting. Production-ready MVP.
+**Included** is a production-ready, multi-client AI assistant platform that automates email processing, document summarization, and client notifications for small and medium-sized businesses.
+
+---
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Environment Variables](#environment-variables)
+  - [Running Locally](#running-locally)
+  - [Running the Dashboard](#running-the-dashboard)
+- [Database Setup](#database-setup)
+- [API Reference](#api-reference)
+  - [Health](#health)
+  - [Clients](#clients)
+  - [Tasks](#tasks)
+  - [Summaries](#summaries)
+  - [Notifications](#notifications)
+  - [Reports](#reports)
+  - [Email Webhooks](#email-webhooks)
+- [Client Onboarding](#client-onboarding)
+- [Email Flow](#email-flow)
+- [Background Workers](#background-workers)
+- [Dashboard](#dashboard)
+- [Testing](#testing)
+- [Deployment](#deployment)
+
+---
+
+## Overview
+
+Each client in the Included platform gets a unique **forwarding email address** (`client_<uuid>@yourdomain.com`). When a client forwards an email to that address, the system:
+
+1. Receives the inbound email via a Resend webhook
+2. Routes it to the correct client by parsing the address
+3. Creates a **task** for processing
+4. Sends the task through an **LLM worker** (GPT-4o Mini) to generate a 1–2 sentence summary
+5. Stores the summary and creates **notification events**
+6. The **email worker** picks up pending email notifications and delivers them via Resend
+
+All of this is visible in the **React dashboard** in real time.
+
+---
 
 ## Features
 
-- **Multi-Client Architecture**: Complete data isolation between clients with client-specific tasks and reports
-- **Client Management**: Create and manage multiple clients with company information; each client gets a unique inbound email address
-- **Task Processing**: Automated LLM-powered task processing with robust lifecycle management (pending → processing → completed/failed)
-- **Inbound Email Ingestion**: Receive inbound emails via Resend webhook and automatically route them to the correct client for processing
-- **Email-to-Task Automation**: Webhook endpoint to automatically convert incoming emails into tasks for processing
-- **Summary Storage**: Dedicated summaries table for storing LLM-generated summaries
-- **Daily Reporting**: Automated generation of daily task reports filtered by client
-- **Email Notifications**: Robust email notification system with Resend API integration, batch processing, and retry logic
-- **Background Email Worker**: Automatic email worker that starts with the server and processes pending email notifications
-- **Notification-Ready**: Built-in notification event system (email, WhatsApp) ready for integration
-- **Clean Architecture**: Separation of concerns with controllers, services, routes, and middleware
-- **Retry Logic**: Automatic retry with exponential backoff for LLM processing and email sending
-- **Production-Ready**: Built with TypeScript, Express, and Supabase for scalability
+| Feature | Status |
+|---|---|
+| Multi-client isolation (UUID-based) | ✅ Live |
+| Client onboarding form (dashboard) | ✅ Live |
+| Unique inbound email per client | ✅ Live |
+| Inbound email → task pipeline (Resend webhook) | ✅ Live |
+| LLM summarization (GPT-4o Mini, retry logic) | ✅ Live |
+| Email notifications (Resend, batch worker) | ✅ Live |
+| Dashboard: clients, notifications, logs, reports | ✅ Live |
+| WhatsApp notifications | 🔒 Planned |
+| Multi-Mac orchestration | 🔒 Planned |
+| Historical trend charts | 🔒 Planned |
+| Live log streaming | 🔒 Planned |
+
+---
 
 ## Architecture
 
-The backend follows clean architecture principles with clear separation of concerns:
-
 ```
-controllers/
-├── clientController.ts    # Client endpoint handlers
-├── taskController.ts      # Task endpoint handlers
-└── reportController.ts    # Report endpoint handlers
-
-routes/
-├── clientRoutes.ts        # Client route definitions
-├── taskRoutes.ts          # Task route definitions
-├── reportRoutes.ts        # Report route definitions
-├── emailWebhook.ts        # Email webhook route definitions
-└── inboundEmailRoutes.ts  # Resend inbound email webhook route
-
-services/
-├── clientService.ts       # Client business logic (with inbound email address generation)
-├── taskService.ts         # Task business logic
-├── summaryService.ts      # Summary business logic
-├── notificationService.ts # Notification event management
-├── emailService.ts        # Email sending with Resend API
-├── emailSyncService.ts    # Email-to-task conversion service
-├── inboundEmailService.ts # Inbound email ingestion and client routing
-└── reportService.ts       # Report generation logic
-
-lib/
-└── middleware.ts          # Express middleware (logging, error handling)
-
-database/
-├── supabase.ts            # Supabase client with lazy initialization
-└── migrations/            # SQL migration scripts
-
-orchestrator/
-└── index.ts               # Main Express server
-
-workers/
-├── llmWorker.ts           # OpenAI GPT-4o-mini LLM processing with retry logic
-├── automationWorker.ts    # Background task processing worker
-└── emailWorker.ts         # Email notification batch processing worker
-
-types/
-└── task.ts                # TypeScript type definitions
+Client email → Resend inbound webhook
+                   │
+                   ▼
+         inboundEmailService
+         (extract client ID,
+          store email record)
+                   │
+                   ▼
+            taskService
+       (create task, async LLM)
+                   │
+                   ▼
+            llmWorker
+        (GPT-4o Mini, retry)
+                   │
+                   ▼
+          summaryService
+      (store summary, fire
+       notification events)
+                   │
+                   ▼
+         emailWorker (polling)
+      (fetch pending notifs,
+       send via Resend, update
+       status to sent/failed)
 ```
 
-## API Endpoints
+---
 
-### POST /clients
-Create a new client.
+## Project Structure
 
-**Request:**
-```json
-{
-  "name": "Acme Corporation",
-  "email": "contact@acme.com",
-  "company": "Acme Corp"
-}
+```
+included-mvp/
+├── orchestrator/
+│   └── index.ts              # Express server entry point, starts workers
+│
+├── controllers/              # HTTP request handlers
+│   ├── clientController.ts
+│   ├── taskController.ts
+│   ├── summaryController.ts
+│   ├── notificationController.ts
+│   └── reportController.ts
+│
+├── routes/                   # Express route definitions
+│   ├── clientRoutes.ts
+│   ├── taskRoutes.ts
+│   ├── summaryRoutes.ts
+│   ├── notificationRoutes.ts
+│   ├── reportRoutes.ts
+│   ├── emailWebhook.ts
+│   └── inboundEmailRoutes.ts
+│
+├── services/                 # Business logic
+│   ├── clientService.ts      # Client CRUD, inbound email generation
+│   ├── taskService.ts        # Task lifecycle (pending→processing→completed)
+│   ├── summaryService.ts     # LLM summary storage
+│   ├── notificationService.ts # Notification event management
+│   ├── emailService.ts       # Resend API integration, retry logic
+│   ├── emailSyncService.ts   # Webhook → task conversion
+│   ├── inboundEmailService.ts # Resend inbound webhook handler
+│   └── reportService.ts      # Daily report generation
+│
+├── workers/
+│   ├── emailWorker.ts        # Polls and sends pending email notifications
+│   ├── automationWorker.ts   # Recovery worker for stuck pending tasks
+│   └── llmWorker.ts          # OpenAI GPT-4o Mini wrapper with retry
+│
+├── lib/
+│   └── middleware.ts         # Request logging, 404, error handlers
+│
+├── database/
+│   ├── supabase.ts           # Supabase client singleton
+│   └── migrations/
+│       ├── 001_create_clients_table.sql
+│       └── 002_add_phone_and_workflow_settings_to_clients.sql
+│
+├── types/
+│   └── task.ts               # Shared TypeScript interfaces
+│
+├── tests/                    # Jest test suites (107 tests)
+│   ├── __mocks__/
+│   │   ├── supabase.mock.ts
+│   │   └── openai.mock.ts
+│   ├── setup.ts
+│   ├── clients.test.ts
+│   ├── task.test.ts
+│   ├── email.test.ts
+│   ├── emailWebhook.test.ts
+│   ├── emailSyncService.test.ts
+│   ├── inboundEmailService.test.ts
+│   ├── inboundEmailRoutes.test.ts
+│   └── report.test.ts
+│
+└── dashboard/                # React + Vite frontend
+    └── src/
+        ├── App.tsx
+        ├── api/client.ts     # Typed API calls to backend
+        ├── types.ts          # Frontend TypeScript interfaces
+        ├── pages/
+        │   ├── DashboardPage.tsx
+        │   ├── ClientsPage.tsx
+        │   ├── NotificationsPage.tsx
+        │   ├── LogsPage.tsx
+        │   └── SettingsPage.tsx
+        └── components/
+            ├── layout/       # Layout, Header, Sidebar
+            └── ui/           # Button, Card, Badge, Modal, etc.
 ```
 
-**Response:**
-```json
-{
-  "success": true,
-  "client": {
-    "id": "uuid",
-    "name": "Acme Corporation",
-    "email": "contact@acme.com",
-    "company": "Acme Corp",
-    "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
-    "created_at": "2024-01-01T00:00:00.000Z",
-    "updated_at": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
+---
 
-### GET /clients
-Get all clients.
-
-**Response:**
-```json
-{
-  "success": true,
-  "clients": [
-    {
-      "id": "uuid",
-      "name": "Acme Corporation",
-      "email": "contact@acme.com",
-      "company": "Acme Corp",
-      "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
-      "created_at": "2024-01-01T00:00:00.000Z"
-    }
-  ]
-}
-```
-
-### GET /clients/:id
-Get a single client by ID.
-
-**Response:**
-```json
-{
-  "success": true,
-  "client": {
-    "id": "uuid",
-    "name": "Acme Corporation",
-    "email": "contact@acme.com",
-    "company": "Acme Corp",
-    "inbound_email": "client_<uuid>@<INBOUND_EMAIL_DOMAIN>",
-    "created_at": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
-
-### POST /task
-Creates and processes a new task with LLM for a specific client.
-
-**Request:**
-```json
-{
-  "text": "Your input text here",
-  "clientId": "client-uuid-here"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "taskId": "uuid",
-  "status": "processing"
-}
-```
-
-### GET /report
-Generates a daily report of all tasks for a specific client.
-
-**Query Parameters:**
-- `clientId` (required): The UUID of the client
-
-**Example:**
-```
-GET /report?clientId=client-uuid-here
-```
-
-**Response:**
-```json
-{
-  "report": "📝 Daily Report:\n- Summary of email: The team needs to schedule a meeting next week to discuss Q1 results and plan for Q2. Team members should share their availability.\n- Summary of document: AI trends in 2024 include increased adoption of large language models, improved multimodal AI capabilities, and focus on AI safety and alignment."
-}
-```
-
-### GET /health
-Health check endpoint.
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "timestamp": "2024-01-01T00:00:00.000Z"
-}
-```
-
-### POST /email-webhook
-Convert incoming emails into tasks for processing.
-
-**Request:**
-```json
-{
-  "clientId": "client-uuid-here",
-  "sender": "sender@example.com",
-  "subject": "Email Subject",
-  "body": "Email body content to be processed",
-  "attachments": ["attachment1.pdf", "attachment2.doc"]
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "taskId": "uuid",
-  "message": "Email successfully converted to task"
-}
-```
-
-### POST /webhooks/resend-inbound
-Receive inbound emails from the Resend webhook and route them to the correct client for processing. The recipient address encodes the client ID in the form `client_<uuid>@<INBOUND_EMAIL_DOMAIN>`.
-
-**Request (sent by Resend):**
-```json
-{
-  "from": "sender@example.com",
-  "to": "client_<uuid>@included.yourdomain.com",
-  "subject": "Email Subject",
-  "text": "Plain-text email body",
-  "html": "<p>HTML email body</p>"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true
-}
-```
-
-## Setup
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- Supabase account and project
-- LLM API key (optional for production)
+- **Node.js** 18+ (20 recommended)
+- **npm** 9+
+- A **Supabase** project (free tier works)
+- An **OpenAI** API key
+- A **Resend** account with a verified domain
 
-### Installation
+### Environment Variables
 
-1. Clone the repository:
-```bash
-git clone https://github.com/firasghr/included-mvp.git
-cd included-mvp
-```
+Copy `.env.example` to `.env` and fill in the values:
 
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Configure environment variables:
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` with your configuration:
-```env
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
-OPENAI_API_KEY=your_openai_key
-RESEND_API_KEY=your_resend_api_key
-FROM_EMAIL=noreply@yourdomain.com
-INBOUND_EMAIL_DOMAIN=included.yourdomain.com
-PORT=3000
-```
+| Variable | Description |
+|---|---|
+| `SUPABASE_URL` | Your Supabase project URL |
+| `SUPABASE_KEY` | Supabase `anon` (or `service_role`) key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `RESEND_API_KEY` | Resend API key |
+| `FROM_EMAIL` | Verified sender email (e.g. `noreply@yourdomain.com`) |
+| `INBOUND_EMAIL_DOMAIN` | Domain for client inbound addresses (e.g. `mail.yourdomain.com`) |
+| `DASHBOARD_ORIGIN` | Dashboard URL for CORS (default: `http://localhost:5173`) |
+| `PORT` | Server port (default: `3000`) |
 
-4. Create Supabase tables:
+### Running Locally
 
-**For new installations**, run this SQL in your Supabase SQL editor:
-
-```sql
--- Create clients table
-CREATE TABLE clients (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  email TEXT,
-  company TEXT,
-  inbound_email TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Create tasks table
-CREATE TABLE tasks (
-  id UUID PRIMARY KEY,
-  input TEXT NOT NULL,
-  output TEXT,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Create emails table (inbound emails received via Resend webhook)
-CREATE TABLE emails (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  sender TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  body TEXT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('pending', 'processing', 'completed', 'failed')) DEFAULT 'pending',
-  source TEXT NOT NULL CHECK (source IN ('inbound')) DEFAULT 'inbound',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Create summaries table
-CREATE TABLE summaries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  summary TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Create notification_events table
-CREATE TABLE notification_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  summary_id UUID NOT NULL REFERENCES summaries(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('email', 'whatsapp')),
-  status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')) DEFAULT 'pending',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- Create indexes for better query performance
-CREATE INDEX idx_tasks_client_id ON tasks(client_id);
-CREATE INDEX idx_tasks_client_status ON tasks(client_id, status);
-CREATE INDEX idx_summaries_task_id ON summaries(task_id);
-CREATE INDEX idx_summaries_client_id ON summaries(client_id);
-CREATE INDEX idx_emails_client_id ON emails(client_id);
-CREATE INDEX idx_emails_status ON emails(status);
-CREATE INDEX idx_notification_events_client_id ON notification_events(client_id);
-CREATE INDEX idx_notification_events_status ON notification_events(status);
-CREATE INDEX idx_notification_events_summary_id ON notification_events(summary_id);
-```
-
-**For existing installations** with data, see the migration guide:
 ```bash
-cat database/migrations/001_create_clients_table.sql
-# Also see MULTI_CLIENT_ARCHITECTURE.md for detailed migration steps
-```
+# Install dependencies
+npm install
 
-### Running the Server
-
-**Development mode:**
-```bash
+# Start the API server with ts-node (hot reload)
 npm run dev
 ```
 
-**Production mode:**
+The server starts on `http://localhost:3000`. It also automatically:
+- Starts the **email worker** (polls every 10 s)
+- Starts the **automation worker** as a recovery mechanism (runs every 60 s)
+
+### Running the Dashboard
+
 ```bash
-npm run build
-npm start
+cd dashboard
+npm install
+npm run dev
 ```
 
-**Note:** The email worker starts automatically in the background when the server starts. It processes pending email notifications every 10 seconds with a batch size of 10 emails.
+The dashboard starts on `http://localhost:5173` and proxies `/api/*` calls to `http://localhost:3000`.
 
-## Email Notification System
+---
 
-The email notification system provides robust email sending capabilities with the following features:
+## Database Setup
 
-### Features
-- ✅ **Batch Processing**: Process notifications in configurable batches (default: 10-20 emails)
-- ✅ **Retry Logic**: Exponential backoff for failed email sends (3 retries with increasing delays)
-- ✅ **Multi-Client Isolation**: Each notification is tied to a specific client_id
-- ✅ **Status Tracking**: Automatic status updates (pending → sent/failed)
-- ✅ **Comprehensive Logging**: Detailed logs for monitoring and debugging
-- ✅ **Resend Integration**: Uses Resend API for reliable email delivery
+Run the migration files in order against your Supabase database using the SQL Editor or `psql`:
 
-### Usage
+```sql
+-- Migration 1: Create all core tables
+\i database/migrations/001_create_clients_table.sql
 
-#### Manual Processing
-Process pending email notifications once:
-
-```typescript
-import { processPendingEmails } from './workers/emailWorker';
-
-// Process up to 10 pending emails
-const stats = await processPendingEmails(10);
-console.log(stats); // { processed: 10, successful: 9, failed: 1 }
+-- Migration 2: Add phone, workflow_settings, inbound_email to clients
+\i database/migrations/002_add_phone_and_workflow_settings_to_clients.sql
 ```
 
-#### Continuous Mode
-Run the email worker continuously with automatic polling:
+> **Note:** Migration 001 creates `clients`, `tasks`, `summaries`, and `notification_events` tables. Migration 002 adds the `phone`, `workflow_settings`, and `inbound_email` columns to `clients`.
 
-```typescript
-import { startEmailWorker } from './workers/emailWorker';
+---
 
-// Process 10 emails every 60 seconds
-await startEmailWorker(10, 60000);
+## API Reference
+
+All endpoints return JSON. Error responses follow the shape `{ error: string, message: string }`.
+
+### Health
+
 ```
-
-#### Run from Command Line
-```bash
-# Process emails once
-npx ts-node workers/emailWorker.ts
-
-# Or use the compiled version
-node dist/workers/emailWorker.js
+GET /health
 ```
+Returns `{ status: "ok", timestamp: "..." }`.
 
-### Email Service API
+---
 
-The `EmailService` class provides the following methods:
+### Clients
 
-- `fetchPendingEmails(limit)` - Fetch pending email notifications from Supabase
-- `sendEmail(to, subject, html)` - Send an email via Resend API
-- `updateStatus(eventId, status, errorMessage?)` - Update notification status
-- `handleRetry(fn, maxRetries, baseDelayMs)` - Execute function with exponential backoff
-- `processEmailNotification(event)` - Process a single notification end-to-end
-
-### Configuration
-
-Add these environment variables to your `.env` file:
-
-```env
-RESEND_API_KEY=re_your_api_key_here
-FROM_EMAIL=noreply@yourdomain.com
+#### Create a client
 ```
+POST /clients
+Content-Type: application/json
 
-Get your Resend API key from [resend.com](https://resend.com).
-
-## Email-to-Task Automation
-
-The email-to-task automation system allows external integrations to send emails directly to the system for processing.
-
-### Features
-- ✅ **Webhook Integration**: Accept incoming emails via POST /email-webhook endpoint
-- ✅ **Automatic Task Creation**: Convert email content to tasks automatically
-- ✅ **Multi-Client Support**: Route emails to specific clients via clientId
-- ✅ **Email Metadata Capture**: Store sender, subject, body, and attachments
-- ✅ **Seamless Processing**: Created tasks follow the same LLM processing pipeline
-
-### Webhook Payload Format
-
-Send a POST request to `/email-webhook` with the following JSON payload:
-
-```json
 {
-  "clientId": "client-uuid-here",
-  "sender": "sender@example.com",
-  "subject": "Email Subject",
-  "body": "Email body content to be processed",
-  "attachments": ["attachment1.pdf", "attachment2.doc"]
+  "name": "Jane Smith",          // required
+  "email": "jane@example.com",   // optional
+  "company": "Acme Corp",        // optional
+  "phone": "+1 555 000 0000",    // optional
+  "workflow_settings": {         // optional
+    "reportFrequency": "daily",  // "daily" | "weekly" | "none"
+    "emailNotifications": true,
+    "whatsappNotifications": false
+  }
 }
 ```
 
-### Integration Examples
+Response `201`:
+```json
+{
+  "success": true,
+  "client": {
+    "id": "uuid",
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "inbound_email": "client_<uuid>@mail.yourdomain.com",
+    "created_at": "..."
+  }
+}
+```
 
-**Using curl:**
+#### List all clients
+```
+GET /clients
+```
+
+#### Get client by ID
+```
+GET /clients/:id
+```
+
+---
+
+### Tasks
+
+#### Create a task (manual)
+```
+POST /task
+Content-Type: application/json
+
+{
+  "text": "Email content or document to summarise",
+  "clientId": "client-uuid"
+}
+```
+
+Response `201`:
+```json
+{ "success": true, "taskId": "uuid", "status": "processing" }
+```
+
+The task is processed asynchronously — poll `GET /task` to track status.
+
+#### List recent tasks
+```
+GET /task?limit=50
+```
+
+---
+
+### Summaries
+
+#### List summaries
+```
+GET /summaries?limit=50
+GET /summaries?clientId=<uuid>
+```
+
+---
+
+### Notifications
+
+#### List notifications
+```
+GET /notifications
+GET /notifications?status=pending|sent|failed
+GET /notifications?clientId=<uuid>
+```
+
+---
+
+### Reports
+
+#### Generate daily report
+```
+GET /report?clientId=<uuid>
+```
+
+Returns a formatted plain-text report of all summaries for that client.
+
+---
+
+### Email Webhooks
+
+#### Manual email-to-task webhook
+```
+POST /email-webhook
+Content-Type: application/json
+
+{
+  "clientId": "uuid",
+  "sender": "sender@example.com",
+  "subject": "Meeting notes",
+  "body": "Full email body...",
+  "attachments": []  // optional
+}
+```
+
+#### Resend inbound email webhook
+Configure Resend to `POST` to:
+```
+POST /webhooks/resend-inbound
+```
+
+The payload must include `from`, `to` (must match `client_<uuid>@domain`), `subject`, and `text`.
+
+---
+
+## Client Onboarding
+
+### Via Dashboard (recommended)
+
+1. Navigate to the **Clients** page
+2. Click **+ New Client**
+3. Fill in the form: name, email, phone, company, workflow settings
+4. Click **Create Client**
+5. The modal shows the auto-generated **Client ID (UUID)** and **Forwarding Email**
+6. Share the forwarding email with the client — they forward emails to it for AI processing
+
+### Via API
+
 ```bash
-curl -X POST http://localhost:3000/email-webhook \
+curl -X POST http://localhost:3000/clients \
   -H "Content-Type: application/json" \
   -d '{
-    "clientId": "550e8400-e29b-41d4-a716-446655440000",
-    "sender": "john@example.com",
-    "subject": "Meeting Request",
-    "body": "Can we schedule a meeting to discuss the Q1 results?",
-    "attachments": []
+    "name": "Jane Smith",
+    "email": "jane@example.com",
+    "workflow_settings": { "reportFrequency": "daily", "emailNotifications": true, "whatsappNotifications": false }
   }'
 ```
 
-**Integration Options:**
-- **Gmail**: Use Gmail API webhook or forwarding rules
-- **Outlook**: Use Microsoft Graph API webhooks
-- **IMAP**: Poll IMAP servers and forward to webhook
-- **Email Services**: Use services like SendGrid, Mailgun webhooks
-- **Custom Solutions**: Any system that can make HTTP POST requests
+---
 
-### Workflow
-1. External system sends email data to `/email-webhook`
-2. EmailSyncService validates the payload
-3. Task is created with email content as input text
-4. Task enters the normal processing pipeline (pending → processing → completed)
-5. LLM processes the email content
-6. Summary is generated and notifications are sent
+## Email Flow
 
-## Inbound Email Ingestion (Resend Webhook)
+```
+1. Client forwards email to client_<uuid>@mail.yourdomain.com
+2. Resend delivers it to POST /webhooks/resend-inbound
+3. inboundEmailService extracts the UUID from the To address
+4. Validates the client exists in Supabase
+5. Stores an email record (status: pending)
+6. Fires a task through taskService.createTask (non-blocking)
+7. taskService processes the task async:
+   a. status → processing
+   b. llmWorker generates a 1–2 sentence summary
+   c. summaryService stores the summary
+   d. notificationService creates email + whatsapp notification events
+   e. status → completed
+8. emailWorker (polling every 10s) picks up pending email notifications
+9. emailService sends the summary email via Resend
+10. Notification event status → sent
+```
 
-The inbound email ingestion system lets real email senders send emails directly to a per-client address. Resend delivers the email to your server as a webhook, and the system automatically routes it to the right client.
+---
 
-### How It Works
+## Background Workers
 
-1. When a client is created, they receive a unique inbound email address in the form:
-   ```
-   client_<uuid>@<INBOUND_EMAIL_DOMAIN>
-   ```
-2. Configure Resend to forward inbound emails for your domain to `POST /webhooks/resend-inbound`.
-3. When an email arrives, `InboundEmailService` extracts the client UUID from the `to` address, validates the client, persists an `emails` record (status=`pending`, source=`inbound`), and non-blockingly triggers the standard task → summary → notification pipeline.
+Both workers start automatically with the server:
 
-### Features
-- ✅ **Resend Webhook Integration**: Accepts Resend inbound email webhooks at `POST /webhooks/resend-inbound`
-- ✅ **Automatic Client Routing**: Routes each email to the correct client via the `to` address
-- ✅ **Email Record Persistence**: Stores every inbound email in the `emails` table
-- ✅ **Pipeline Trigger**: Automatically kicks off task → summary → notification processing
-- ✅ **Fault Tolerant**: Pipeline failures are logged but do not affect the HTTP response
+### Email Worker (`workers/emailWorker.ts`)
+- Polls for `pending` email notification events every 10 seconds
+- Processes in batches of 10
+- Uses exponential back-off retry (3 attempts, up to 10 s delay)
+- Updates notification status to `sent` or `failed`
 
-### Setup
+### Automation Worker (`workers/automationWorker.ts`)
+- Recovery mechanism — runs every 60 seconds
+- Picks up tasks stuck in `pending` state (e.g., after a server restart)
+- Processes them through the full LLM → summary → notification pipeline
 
-1. Set `INBOUND_EMAIL_DOMAIN` in your `.env` to the domain you've configured in Resend (e.g. `included.yourdomain.com`).
-2. In the Resend dashboard, add an inbound route that delivers to `https://your-server/webhooks/resend-inbound`.
-3. Create a client via `POST /clients`; the response will include the `inbound_email` address to share with the sender.
+---
 
-### Workflow
-1. Sender sends an email to `client_<uuid>@included.yourdomain.com`
-2. Resend delivers the payload to `POST /webhooks/resend-inbound`
-3. `InboundEmailService` extracts the client UUID from the `to` field
-4. Client is validated against the database
-5. An `emails` record is persisted (status=`pending`, source=`inbound`)
-6. The task → summary → notification pipeline is triggered asynchronously
-7. HTTP `200 { success: true }` is returned immediately
+## Dashboard
 
-## Development
+The React dashboard (`dashboard/`) communicates with the backend API and auto-refreshes every 12 seconds.
 
-### Build
+| Page | Description |
+|---|---|
+| **Dashboard** | System health, client count, notification stats, recent notifications |
+| **Clients** | Full client list with forwarding email. "+ New Client" button opens onboarding form |
+| **Notifications** | All notification events with status filter tabs (All / Pending / Sent / Failed) |
+| **Logs** | Recent tasks with status, input preview, and generated output summary |
+| **Settings** | Configuration placeholders (inbound email domain, Mac management, alerts, retries) |
+
+### Building the dashboard
 ```bash
+cd dashboard
 npm run build
+# Output in dashboard/dist/
 ```
 
-### Lint
-```bash
-npm run lint
-```
+---
 
-### Test
+## Testing
+
 ```bash
+# Run all 107 tests
 npm test
+
+# Run with coverage
+npm test -- --coverage
 ```
 
-## Production Deployment
+Tests use in-memory Supabase and OpenAI mocks — no real API calls are made.
 
-The server is production-ready with:
+Test files:
+- `tests/clients.test.ts` — Client CRUD endpoints
+- `tests/task.test.ts` — Task creation, async LLM processing, notifications
+- `tests/email.test.ts` — Email service, retry logic, HTML escaping
+- `tests/emailWebhook.test.ts` — Manual email webhook
+- `tests/emailSyncService.test.ts` — Email sync service
+- `tests/inboundEmailService.test.ts` — Resend inbound webhook service
+- `tests/inboundEmailRoutes.test.ts` — Resend inbound webhook route
+- `tests/report.test.ts` — Report generation
 
-- ✅ TypeScript for type safety
-- ✅ Error handling and logging
-- ✅ Input validation
-- ✅ Environment variable configuration
-- ✅ Health check endpoint
-- ✅ Modular architecture
-- ✅ Asynchronous task processing
+---
 
-### Recommended Enhancements for Production:
+## Deployment
 
-1. **Message Queue**: Integrate Bull or RabbitMQ for background job processing
-2. **Rate Limiting**: Add express-rate-limit for API protection
-3. **Authentication**: Implement JWT or OAuth for secure endpoints
-4. **Monitoring**: Add application monitoring (e.g., Sentry, DataDog)
-5. **Logging**: Implement structured logging (e.g., Winston, Pino)
-6. **Caching**: Add Redis for caching frequently accessed data
-7. **Testing**: Add comprehensive unit and integration tests
+### Mac Mini (recommended for production)
+
+```bash
+# Build TypeScript
+npm run build
+
+# Start the compiled server
+npm start
+# → runs dist/orchestrator/index.js
+```
+
+Use `pm2` or `launchd` to keep the server running as a daemon:
+
+```bash
+# With pm2
+npm install -g pm2
+pm2 start dist/orchestrator/index.js --name included-api
+pm2 save
+pm2 startup
+```
+
+### Dashboard
+
+```bash
+cd dashboard
+npm run build
+# Serve dashboard/dist/ with nginx, Caddy, or similar
+```
+
+Point Nginx at `dashboard/dist/` and proxy `/api/*` to `http://localhost:3000`.
+
+### Environment variables checklist
+
+- [ ] `SUPABASE_URL` and `SUPABASE_KEY` pointing to production database
+- [ ] `OPENAI_API_KEY` with sufficient quota
+- [ ] `RESEND_API_KEY` with verified sending domain
+- [ ] `FROM_EMAIL` set to your verified sender
+- [ ] `INBOUND_EMAIL_DOMAIN` set to the domain you've configured in Resend for inbound routing
+- [ ] `DASHBOARD_ORIGIN` set to your production dashboard URL
+- [ ] Resend inbound webhook configured to `POST /webhooks/resend-inbound`
+
+---
 
 ## License
 
