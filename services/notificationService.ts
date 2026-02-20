@@ -42,6 +42,38 @@ export class NotificationService {
   }
 
   /**
+   * Get all notification events, optionally filtered by status and/or clientId.
+   *
+   * @param filters - Optional filters: status ('pending'|'sent'|'failed') and/or clientId
+   * @param limit   - Maximum rows to return (default: 100)
+   */
+  async getAllNotifications(
+    filters?: { status?: string; clientId?: string },
+    limit: number = 100
+  ): Promise<NotificationEvent[]> {
+    let query = supabase
+      .from('notification_events')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status);
+    }
+    if (filters?.clientId) {
+      query = query.eq('client_id', filters.clientId);
+    }
+
+    const { data: events, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to fetch notifications: ${error.message}`);
+    }
+
+    return events || [];
+  }
+
+  /**
    * Get pending notification events
    */
   async getPendingNotifications(limit: number = 50): Promise<NotificationEvent[]> {
