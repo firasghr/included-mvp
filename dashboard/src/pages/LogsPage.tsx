@@ -27,6 +27,7 @@ const STATUS_VARIANT: Record<Task['status'], 'green' | 'yellow' | 'red' | 'gray'
 
 export function LogsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [clientFilter, setClientFilter] = useState<string>('all');
 
   const fetchAll = useCallback(async () => {
     const [tasks, clients] = await Promise.all([
@@ -34,10 +35,14 @@ export function LogsPage() {
       fetchClients().catch(() => [] as Client[]),
     ]);
     const clientMap = new Map(clients.map(c => [c.id, c.name]));
-    return { tasks, clientMap };
+    return { tasks, clients, clientMap };
   }, []);
 
   const { data, loading, error, refresh } = usePolling(fetchAll, 12000);
+
+  const filteredTasks = (data?.tasks ?? []).filter(
+    (t) => clientFilter === 'all' || t.client_id === clientFilter
+  );
 
   return (
     <div className="space-y-6">
@@ -47,26 +52,30 @@ export function LogsPage() {
         </div>
       )}
 
-      {/* Search/filter bar — locked */}
-      <LockedFeature message="Log filtering — coming soon">
-        <Card>
-          <div className="flex items-center gap-3">
-            <input
-              readOnly
-              placeholder="Search logs by date, client, or status…"
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-4 py-2 text-sm text-slate-500 dark:text-slate-400"
-            />
-            <Button variant="secondary" size="sm" disabled>Filter</Button>
+      {/* Search/filter bar — client filter active, date/export locked */}
+      <Card>
+        <div className="flex items-center gap-3 flex-wrap">
+          <select
+            value={clientFilter}
+            onChange={(e) => setClientFilter(e.target.value)}
+            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          >
+            <option value="all">All Clients</option>
+            {(data?.clients ?? []).map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <LockedFeature message="Date range filter — coming soon">
             <Button variant="secondary" size="sm" disabled>Date Range</Button>
-          </div>
-        </Card>
-      </LockedFeature>
+          </LockedFeature>
+        </div>
+      </Card>
 
       {/* Task log table */}
-      <Card title={`Tasks${data ? ` (${data.tasks.length})` : ''}`}>
+      <Card title={`Tasks${filteredTasks ? ` (${filteredTasks.length})` : ''}`}>
         {loading && !data ? (
           <div className="flex justify-center py-8"><Spinner /></div>
-        ) : !data?.tasks?.length ? (
+        ) : !filteredTasks?.length ? (
           <EmptyState
             icon="📋"
             title="No tasks yet"
@@ -86,9 +95,9 @@ export function LogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.tasks.map((task: Task) => {
+                {filteredTasks.map((task: Task) => {
                   const isExpanded = expanded === task.id;
-                  const clientName = data.clientMap.get(task.client_id);
+                  const clientName = data?.clientMap.get(task.client_id);
                   return (
                     <tr
                       key={task.id}
