@@ -4,9 +4,11 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 
+const DEFAULT_POLLING_INTERVAL_MS = 12000;
+
 export function usePolling<T>(
   fetchFn: () => Promise<T>,
-  intervalMs: number = 12000,
+  intervalMs: number = DEFAULT_POLLING_INTERVAL_MS,
   immediate: boolean = true
 ) {
   const [data, setData] = useState<T | null>(null);

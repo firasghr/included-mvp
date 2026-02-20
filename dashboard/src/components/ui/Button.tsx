@@ -50,7 +50,7 @@ export function Button({
           'inline-flex items-center gap-1.5 rounded-md font-medium transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2',
           SIZE_CLASSES[size],
           VARIANT_CLASSES[variant],
-          isDisabled && 'opacity-50 cursor-not-allowed pointer-events-none',
+          isDisabled && 'opacity-50 cursor-not-allowed',
           locked && 'cursor-not-allowed',
           className
         )}

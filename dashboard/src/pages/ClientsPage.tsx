@@ -23,7 +23,11 @@ import type { Client, NotificationEvent } from '../types';
 function lastNotifStatus(notifications: NotificationEvent[], clientId: string): NotificationEvent['status'] | null {
   const clientNotifs = notifications
     .filter((n) => n.client_id === clientId)
-    .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
+    .sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : -Infinity;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : -Infinity;
+      return bTime - aTime;
+    });
   return clientNotifs[0]?.status ?? null;
 }
 
